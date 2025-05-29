@@ -12,6 +12,10 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    user-select: none; /* Verhindert Textmarkierung */
+    -webkit-user-select: none; /* Für Safari */
+    -moz-user-select: none; /* Für Firefox */
+    -ms-user-select: none; /* Für IE/Edge */
 }
 
 body {
@@ -20,12 +24,20 @@ body {
     background-color: var(--light-color);
     color: var(--dark-color);
     min-height: 100vh;
+    touch-action: manipulation; /* Verhindert Pinch-Zoom */
+    -webkit-touch-callout: none; /* Verhindert das Kontextmenü auf iOS */
+    overflow: hidden; /* Verhindert Überscroll-Effekte */
+    position: fixed; /* Verhindert Bounce-Effekte auf iOS */
+    width: 100%;
+    height: 100%;
 }
 
 .app-container {
     max-width: 600px;
     margin: 0 auto;
     padding: 1rem;
+    overflow-y: auto; /* Erlaubt Scrollen innerhalb des Containers */
+    height: 100%;
 }
 
 header {
