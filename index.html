@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4CAF50">
+    <title>Hummelzähler</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>Hummelzähler</h1>
+        </header>
+        
+        <div class="timer-container">
+            <div id="timer">5:00</div>
+            <div class="timer-buttons">
+                <button id="start-button" class="primary-button">Zählung starten</button>
+                <button id="reset-button" class="warning-button">Neustart</button>
+            </div>
+            
+            <div id="distance-tracking" class="distance-tracking hidden">
+                <h3>Strecken-Tracking (50m)</h3>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div id="target-position" class="target-position"></div>
+                        <div id="current-position" class="current-position"></div>
+                    </div>
+                    <div class="progress-labels">
+                        <span>0m</span>
+                        <span>50m</span>
+                    </div>
+                </div>
+                <div id="distance-info" class="distance-info">
+                    <div>Aktuelle Distanz: <span id="current-distance">0</span> m</div>
+                    <div>Geschwindigkeit: <span id="speed-feedback">-</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="counter-container">
+            <h2>Hummeln</h2>
+            <div id="bumblebee-list">
+                <!-- Hier werden die Hummelzähler dynamisch eingefügt -->
+            </div>
+            <button id="add-bumblebee" class="secondary-button">Neue Hummelart hinzufügen</button>
+        </div>
+
+        <div class="installation-guide">
+            <h2>Installation auf dem Homescreen</h2>
+            <div class="tabs">
+                <button class="tab-button active" data-tab="android">Android</button>
+                <button class="tab-button" data-tab="ios">iPhone</button>
+            </div>
+            <div class="tab-content active" id="android">
+                <ol>
+                    <li>Öffne die Seite in Chrome</li>
+                    <li>Tippe auf die drei Punkte (⋮) in der oberen rechten Ecke</li>
+                    <li>Wähle "Zum Startbildschirm hinzufügen"</li>
+                    <li>Bestätige mit "Hinzufügen"</li>
+                </ol>
+            </div>
+            <div class="tab-content" id="ios">
+                <ol>
+                    <li>Öffne die Seite in Safari</li>
+                    <li>Tippe auf das Teilen-Symbol (□↑) unten in der Mitte</li>
+                    <li>Scrolle nach unten und wähle "Zum Home-Bildschirm"</li>
+                    <li>Tippe oben rechts auf "Hinzufügen"</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Service Worker registrieren für Offline-Funktionalität
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker erfolgreich registriert mit Scope:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.error('Service Worker Registrierung fehlgeschlagen:', error);
+                    });
+            });
+        } else {
+            console.warn('Service Worker wird von diesem Browser nicht unterstützt. Offline-Funktionalität eingeschränkt.');
+        }
+    </script>
+</body>
+</html>

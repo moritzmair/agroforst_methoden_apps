@@ -1,0 +1,312 @@
+:root {
+    --primary-color: #4CAF50;
+    --secondary-color: #FFC107;
+    --dark-color: #333;
+    --light-color: #f4f4f4;
+    --danger-color: #f44336;
+    --success-color: #4CAF50;
+    --warning-color: #FF9800;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    background-color: var(--light-color);
+    color: var(--dark-color);
+    min-height: 100vh;
+}
+
+.app-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+h1, h2 {
+    margin-bottom: 1rem;
+}
+
+.timer-container {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+#timer {
+    font-size: 3rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+}
+
+.counter-container {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.bumblebee-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    background-color: var(--light-color);
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.bumblebee-name {
+    flex-grow: 1;
+    margin-right: 1rem;
+}
+
+.counter-controls {
+    display: flex;
+    align-items: center;
+}
+
+.counter-value {
+    margin: 0 1rem;
+    font-weight: bold;
+    min-width: 2rem;
+    text-align: center;
+}
+
+.counter-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.decrement {
+    background-color: var(--danger-color);
+    color: white;
+}
+
+.increment {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.timer-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.primary-button, .secondary-button, .warning-button {
+    padding: 0.8rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s;
+}
+
+.primary-button {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.primary-button:hover {
+    background-color: #3e8e41;
+}
+
+.secondary-button {
+    background-color: var(--secondary-color);
+    color: var(--dark-color);
+    margin-top: 1rem;
+}
+
+.secondary-button:hover {
+    background-color: #e6ac00;
+}
+
+.warning-button {
+    background-color: var(--warning-color);
+    color: white;
+}
+
+.warning-button:hover {
+    background-color: #e68a00;
+}
+
+.hidden {
+    display: none;
+}
+
+.distance-tracking {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #ddd;
+}
+
+.progress-container {
+    margin: 1rem 0;
+}
+
+.progress-bar {
+    height: 20px;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    position: relative;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+}
+
+.progress-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.target-position {
+    position: absolute;
+    height: 100%;
+    background-color: rgba(255, 193, 7, 0.3);
+    border-right: 2px dashed var(--secondary-color);
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+.current-position {
+    position: absolute;
+    height: 100%;
+    width: 4px;
+    background-color: var(--primary-color);
+    top: 0;
+    left: 0;
+    z-index: 2;
+}
+
+.distance-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+.too-slow {
+    color: var(--danger-color);
+}
+
+.too-fast {
+    color: var(--warning-color);
+}
+
+.good-pace {
+    color: var(--success-color);
+}
+
+.installation-guide {
+    padding: 1.5rem;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.tabs {
+    display: flex;
+    margin-bottom: 1rem;
+}
+
+.tab-button {
+    padding: 0.5rem 1rem;
+    background-color: var(--light-color);
+    border: none;
+    cursor: pointer;
+    flex-grow: 1;
+}
+
+.tab-button.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.tab-content {
+    display: none;
+    padding: 1rem;
+    background-color: var(--light-color);
+    border-radius: 4px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.tab-content ol {
+    padding-left: 1.5rem;
+}
+
+.tab-content li {
+    margin-bottom: 0.5rem;
+}
+
+/* Für Geräte mit kleinen Bildschirmen */
+@media (max-width: 480px) {
+    .app-container {
+        padding: 0.5rem;
+    }
+    
+    #timer {
+        font-size: 2.5rem;
+    }
+    
+    .counter-button {
+        width: 32px;
+        height: 32px;
+    }
+}
+
+/* Animation für den Timer */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.timer-active {
+    animation: pulse 1s infinite;
+}
+
+.timer-paused {
+    animation: none;
+    color: var(--secondary-color);
+    border: 2px dashed var(--secondary-color);
+    padding: 0.5rem;
+    border-radius: 8px;
+}
