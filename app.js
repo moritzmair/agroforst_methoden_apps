@@ -20,6 +20,7 @@ let timerInterval;
 let timeLeft = 5 * 60; // 5 Minuten in Sekunden
 let isTimerRunning = false;
 let isPaused = false;
+let sessionStartTime = null; // Zeitpunkt des Zählungsbeginns
 
 // GPS-Tracking-Variablen
 let startPosition = null;
@@ -38,6 +39,7 @@ let trackingPoints = []; // Aktuelle Tracking-Punkte
 // DOM-Elemente
 const timerElement = document.getElementById('timer');
 const startButton = document.getElementById('start-button');
+const stopSaveButton = document.getElementById('stop-save-button');
 const resetButton = document.getElementById('reset-button');
 const bumblebeeList = document.getElementById('bumblebee-list');
 const addBumblebeeButton = document.getElementById('add-bumblebee');
@@ -46,6 +48,8 @@ const currentDistanceElement = document.getElementById('current-distance');
 const speedFeedbackElement = document.getElementById('speed-feedback');
 const targetPositionElement = document.getElementById('target-position');
 const currentPositionElement = document.getElementById('current-position');
+const showSessionsButton = document.getElementById('show-sessions');
+const sessionsListElement = document.getElementById('sessions-list');
 
 // Event-Listener
 document.addEventListener('DOMContentLoaded', () => {
@@ -54,13 +58,16 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // UI initialisieren
     renderBumblebeeList();
+    renderSessionsList();
     initTabSwitching();
     initMap();
     
     // Event-Listener für Buttons
     startButton.addEventListener('click', toggleTimer);
+    stopSaveButton.addEventListener('click', stopAndSaveTimer);
     resetButton.addEventListener('click', confirmReset);
     addBumblebeeButton.addEventListener('click', addNewBumblebee);
+    showSessionsButton.addEventListener('click', showSessionsOverview);
 });
 
 // Funktion zum Rendern der Hummel-Liste
@@ -146,6 +153,9 @@ function startTimer() {
     timeLeft = 5 * 60;
     updateTimerDisplay();
     
+    // Startzeitpunkt speichern
+    sessionStartTime = new Date();
+    
     // Timer starten
     timerInterval = setInterval(() => {
         timeLeft--;
@@ -153,13 +163,15 @@ function startTimer() {
         
         if (timeLeft <= 0) {
             stopTimer();
-            alert('Zeit abgelaufen! Die Zählung ist beendet.');
+            saveCountingSession();
+            alert('Zeit abgelaufen! Die Zählung ist beendet und wurde gespeichert.');
         }
     }, 1000);
     
     isTimerRunning = true;
     isPaused = false;
     startButton.textContent = 'Zählung pausieren';
+    stopSaveButton.classList.remove('hidden');
     timerElement.classList.add('timer-active');
     
     // Zähler zurücksetzen
@@ -211,6 +223,7 @@ function stopTimer() {
     isTimerRunning = false;
     isPaused = false;
     startButton.textContent = 'Zählung starten';
+    stopSaveButton.classList.add('hidden');
     timerElement.classList.remove('timer-active');
     timerElement.classList.remove('timer-paused');
     
@@ -219,6 +232,17 @@ function stopTimer() {
     
     // Karten-Tracking stoppen
     stopMapTracking();
+}
+
+function stopAndSaveTimer() {
+    if (isTimerRunning && sessionStartTime) {
+        if (confirm('Möchtest du die aktuelle Zählung speichern?')) {
+            saveCountingSession();
+            alert('Zählung wurde gespeichert.');
+        }
+    }
+    
+    stopTimer();
 }
 
 function updateTimerDisplay() {
@@ -284,6 +308,7 @@ function resetCounting() {
     stopTimer();
     timeLeft = 5 * 60;
     updateTimerDisplay();
+    sessionStartTime = null;
     
     // Zähler zurücksetzen
     bumblebees.forEach(bee => {
@@ -540,4 +565,258 @@ function resetMapPaths() {
     allPaths = [];
     trackingPoints = [];
     isTracking = false;
+}
+
+// Funktionen für Speicherstände
+function saveCountingSession() {
+    if (!sessionStartTime) {
+        alert('Fehler: Keine Startzeit der Session gefunden.');
+        return;
+    }
+    
+    // Erstelle einen eindeutigen Schlüssel basierend auf dem Startzeitpunkt
+    const sessionKey = `session_${sessionStartTime.getTime()}`;
+    
+    // Formatiere das Datum für die Anzeige
+    const displayDate = formatSessionDate(sessionStartTime);
+    
+    // Berechne die Gesamtanzahl der gezählten Tiere
+    const totalCount = bumblebees.reduce((sum, bee) => sum + bee.count, 0);
+    
+    // Erstelle das Session-Objekt
+    const sessionData = {
+        id: sessionKey,
+        startTime: sessionStartTime.toISOString(),
+        displayDate: displayDate,
+        bumblebees: JSON.parse(JSON.stringify(bumblebees)), // Deep copy
+        totalCount: totalCount,
+        gpsData: {
+            startPosition: startPosition,
+            finalDistance: (startPosition && currentPosition) ? calculateDistance(startPosition, currentPosition) : 0
+        }
+    };
+    
+    try {
+        // Speichere die Session
+        localStorage.setItem(sessionKey, JSON.stringify(sessionData));
+        
+        // Aktualisiere die Liste der Sessions
+        updateSessionsList(sessionKey);
+        
+        // Aktualisiere die Anzeige
+        renderSessionsList();
+        
+        console.log('Zählsession gespeichert:', sessionKey);
+    } catch (error) {
+        console.error('Fehler beim Speichern der Session:', error);
+        alert('Fehler beim Speichern der Zählung. Möglicherweise ist der Speicher voll.');
+    }
+}
+
+function updateSessionsList(newSessionKey) {
+    try {
+        let sessionsList = JSON.parse(localStorage.getItem('sessionsList') || '[]');
+        
+        // Füge die neue Session zur Liste hinzu (neueste zuerst)
+        if (!sessionsList.includes(newSessionKey)) {
+            sessionsList.unshift(newSessionKey);
+        }
+        
+        localStorage.setItem('sessionsList', JSON.stringify(sessionsList));
+    } catch (error) {
+        console.error('Fehler beim Aktualisieren der Sessions-Liste:', error);
+    }
+}
+
+function formatSessionDate(date) {
+    const options = {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Europe/Berlin'
+    };
+    return date.toLocaleDateString('de-DE', options).replace(',', ' um');
+}
+
+function getAllSessions() {
+    try {
+        const sessionsList = JSON.parse(localStorage.getItem('sessionsList') || '[]');
+        const sessions = [];
+        
+        sessionsList.forEach(sessionKey => {
+            const sessionData = localStorage.getItem(sessionKey);
+            if (sessionData) {
+                try {
+                    sessions.push(JSON.parse(sessionData));
+                } catch (error) {
+                    console.error('Fehler beim Laden der Session:', sessionKey, error);
+                }
+            }
+        });
+        
+        return sessions;
+    } catch (error) {
+        console.error('Fehler beim Laden aller Sessions:', error);
+        return [];
+    }
+}
+
+function deleteSession(sessionId) {
+    try {
+        // Entferne die Session aus dem localStorage
+        localStorage.removeItem(sessionId);
+        
+        // Entferne die Session aus der Liste
+        let sessionsList = JSON.parse(localStorage.getItem('sessionsList') || '[]');
+        sessionsList = sessionsList.filter(id => id !== sessionId);
+        localStorage.setItem('sessionsList', JSON.stringify(sessionsList));
+        
+        console.log('Session gelöscht:', sessionId);
+        return true;
+    } catch (error) {
+        console.error('Fehler beim Löschen der Session:', error);
+        return false;
+    }
+}
+
+function showSessionsOverview() {
+    const sessions = getAllSessions();
+    
+    if (sessions.length === 0) {
+        alert('Keine gespeicherten Zählungen vorhanden.');
+        return;
+    }
+    
+    // Erstelle eine Übersicht der Sessions
+    let overview = 'Gespeicherte Zählungen:\n\n';
+    sessions.forEach((session, index) => {
+        overview += `${index + 1}. ${session.displayDate}\n`;
+        overview += `   Gesamt: ${session.totalCount} Tiere\n`;
+        overview += `   Distanz: ${session.gpsData.finalDistance.toFixed(1)}m\n\n`;
+    });
+    
+    alert(overview);
+}
+
+function exportSessionData(sessionId) {
+    try {
+        const sessionData = localStorage.getItem(sessionId);
+        if (!sessionData) {
+            alert('Session nicht gefunden.');
+            return;
+        }
+        
+        const session = JSON.parse(sessionData);
+        
+        // Erstelle CSV-ähnliche Daten
+        let csvData = `Zählung vom ${session.displayDate}\n\n`;
+        csvData += 'Art,Anzahl\n';
+        
+        session.bumblebees.forEach(bee => {
+            if (bee.count > 0) {
+                csvData += `${bee.name},${bee.count}\n`;
+            }
+        });
+        
+        csvData += `\nGesamtanzahl,${session.totalCount}\n`;
+        csvData += `Zurückgelegte Distanz,${session.gpsData.finalDistance.toFixed(1)}m\n`;
+        
+        // Erstelle einen Download-Link
+        const blob = new Blob([csvData], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hummelzaehlung_${session.startTime.split('T')[0]}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+    } catch (error) {
+        console.error('Fehler beim Exportieren der Session:', error);
+        alert('Fehler beim Exportieren der Daten.');
+    }
+}
+
+// UI-Funktionen für Sessions-Verwaltung
+function renderSessionsList() {
+    const sessions = getAllSessions();
+    sessionsListElement.innerHTML = '';
+    
+    if (sessions.length === 0) {
+        sessionsListElement.innerHTML = '<p style="text-align: center; color: #666; padding: 1rem;">Keine gespeicherten Zählungen vorhanden.</p>';
+        return;
+    }
+    
+    sessions.forEach(session => {
+        const sessionItem = document.createElement('div');
+        sessionItem.className = 'session-item';
+        sessionItem.innerHTML = `
+            <div class="session-info">
+                <div class="session-date">${session.displayDate}</div>
+                <div class="session-details">
+                    Gesamt: ${session.totalCount} Tiere |
+                    Distanz: ${session.gpsData.finalDistance.toFixed(1)}m
+                </div>
+            </div>
+            <div class="session-actions">
+                <button class="session-button export-button" onclick="exportSessionData('${session.id}')">
+                    Export
+                </button>
+                <button class="session-button delete-button" onclick="confirmDeleteSession('${session.id}', '${session.displayDate}')">
+                    Löschen
+                </button>
+            </div>
+        `;
+        
+        sessionsListElement.appendChild(sessionItem);
+    });
+}
+
+function confirmDeleteSession(sessionId, displayDate) {
+    if (confirm(`Möchtest du die Zählung vom ${displayDate} wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
+        if (deleteSession(sessionId)) {
+            renderSessionsList();
+            alert('Zählung erfolgreich gelöscht.');
+        } else {
+            alert('Fehler beim Löschen der Zählung.');
+        }
+    }
+}
+
+// Erweiterte showSessionsOverview Funktion für bessere Darstellung
+function showSessionsOverview() {
+    const sessions = getAllSessions();
+    
+    if (sessions.length === 0) {
+        alert('Keine gespeicherten Zählungen vorhanden.');
+        return;
+    }
+    
+    // Erstelle eine detaillierte Übersicht
+    let overview = `Gespeicherte Zählungen (${sessions.length}):\n\n`;
+    
+    sessions.forEach((session, index) => {
+        overview += `${index + 1}. ${session.displayDate}\n`;
+        overview += `   Gesamt: ${session.totalCount} Tiere\n`;
+        overview += `   Distanz: ${session.gpsData.finalDistance.toFixed(1)}m\n`;
+        
+        // Zeige die häufigsten Arten
+        const sortedBees = session.bumblebees
+            .filter(bee => bee.count > 0)
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 3);
+        
+        if (sortedBees.length > 0) {
+            overview += '   Häufigste: ';
+            overview += sortedBees.map(bee => `${bee.name} (${bee.count})`).join(', ');
+            overview += '\n';
+        }
+        
+        overview += '\n';
+    });
+    
+    alert(overview);
 }

@@ -25,6 +25,7 @@
             <div id="timer">5:00</div>
             <div class="timer-buttons">
                 <button id="start-button" class="primary-button">Zählung starten</button>
+                <button id="stop-save-button" class="secondary-button hidden">Beenden & Speichern</button>
                 <button id="reset-button" class="warning-button">Neustart</button>
             </div>
             
@@ -53,6 +54,16 @@
                 <!-- Hier werden die Hummelzähler dynamisch eingefügt -->
             </div>
             <button id="add-bumblebee" class="secondary-button">Neue Hummelart hinzufügen</button>
+        </div>
+
+        <div class="sessions-container">
+            <h2>Gespeicherte Zählungen</h2>
+            <div class="sessions-buttons">
+                <button id="show-sessions" class="secondary-button">Übersicht anzeigen</button>
+            </div>
+            <div id="sessions-list" class="sessions-list">
+                <!-- Hier werden die Sessions dynamisch eingefügt -->
+            </div>
         </div>
 
         <div class="installation-guide">
