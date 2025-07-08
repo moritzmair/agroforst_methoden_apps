@@ -48,6 +48,43 @@ header {
     color: white;
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    position: relative;
+}
+
+/* Update Button Styles */
+.update-button {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.update-button:hover {
+    background: #1976D2;
+    transform: scale(1.1);
+}
+
+.update-button:active {
+    transform: scale(0.95);
+}
+
+.update-button.updating {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 h1, h2 {

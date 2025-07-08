@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hummelzaehler-offline-v1';
+const CACHE_NAME = 'hummelzaehler-offline-v2';
 
 // Alle Ressourcen, die für die Offline-Funktionalität benötigt werden
 const ASSETS_TO_CACHE = [
@@ -59,59 +59,90 @@ self.addEventListener('activate', event => {
 
 /**
  * Fetch-Event-Handler für Netzwerkanfragen
- * Implementiert eine Cache-First-Strategie für alle Anfragen
+ * Implementiert verschiedene Strategien je nach Ressourcentyp
  */
 self.addEventListener('fetch', event => {
   console.log('[Service Worker] Fetch:', event.request.url);
   
-  event.respondWith(
-    // Zuerst im Cache nachschauen
-    caches.match(event.request)
-      .then(cachedResponse => {
-        // Wenn die Ressource im Cache gefunden wurde, gib sie zurück
-        if (cachedResponse) {
-          console.log('[Service Worker] Liefere aus Cache:', event.request.url);
-          return cachedResponse;
-        }
-        
-        // Wenn nicht im Cache, versuche es über das Netzwerk
-        // (Dies wird nur beim ersten Laden der App ausgeführt)
-        console.log('[Service Worker] Nicht im Cache, versuche Netzwerk:', event.request.url);
-        
-        return fetch(event.request)
-          .then(response => {
-            // Prüfe, ob wir eine gültige Antwort erhalten haben
-            if (!response || response.status !== 200) {
-              return response;
-            }
-            
-            // Speichere eine Kopie der Antwort im Cache
+  // Network First für HTML-Dateien (für schnellere Updates)
+  if (event.request.headers.get('accept').includes('text/html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Wenn Netzwerk verfügbar, speichere im Cache und gib zurück
+          if (response && response.status === 200) {
             const responseToCache = response.clone();
             caches.open(CACHE_NAME)
               .then(cache => {
                 cache.put(event.request, responseToCache);
-                console.log('[Service Worker] Neue Ressource gecacht:', event.request.url);
+                console.log('[Service Worker] HTML aus Netzwerk gecacht:', event.request.url);
               });
-              
             return response;
-          })
-          .catch(error => {
-            console.error('[Service Worker] Fetch fehlgeschlagen:', error);
-            
-            // Wenn es sich um eine HTML-Anfrage handelt, zeige die Hauptseite an
-            if (event.request.headers.get('accept').includes('text/html')) {
-              return caches.match('./index.html');
-            }
-            
-            // Für andere Ressourcen gib einen leeren Response zurück
-            return new Response('Offline: Ressource nicht verfügbar', {
-              status: 503,
-              statusText: 'Service Unavailable',
-              headers: new Headers({
-                'Content-Type': 'text/plain'
-              })
+          }
+          return response;
+        })
+        .catch(() => {
+          // Fallback auf Cache wenn Netzwerk nicht verfügbar
+          console.log('[Service Worker] Netzwerk nicht verfügbar, verwende Cache für HTML');
+          return caches.match(event.request)
+            .then(cachedResponse => {
+              return cachedResponse || caches.match('./index.html');
             });
-          });
-      })
-  );
+        })
+    );
+  } else {
+    // Cache First für andere Ressourcen (CSS, JS, Bilder)
+    event.respondWith(
+      caches.match(event.request)
+        .then(cachedResponse => {
+          // Wenn die Ressource im Cache gefunden wurde, gib sie zurück
+          if (cachedResponse) {
+            console.log('[Service Worker] Liefere aus Cache:', event.request.url);
+            return cachedResponse;
+          }
+          
+          // Wenn nicht im Cache, versuche es über das Netzwerk
+          console.log('[Service Worker] Nicht im Cache, versuche Netzwerk:', event.request.url);
+          
+          return fetch(event.request)
+            .then(response => {
+              // Prüfe, ob wir eine gültige Antwort erhalten haben
+              if (!response || response.status !== 200) {
+                return response;
+              }
+              
+              // Speichere eine Kopie der Antwort im Cache
+              const responseToCache = response.clone();
+              caches.open(CACHE_NAME)
+                .then(cache => {
+                  cache.put(event.request, responseToCache);
+                  console.log('[Service Worker] Neue Ressource gecacht:', event.request.url);
+                });
+                
+              return response;
+            })
+            .catch(error => {
+              console.error('[Service Worker] Fetch fehlgeschlagen:', error);
+              
+              // Für andere Ressourcen gib einen leeren Response zurück
+              return new Response('Offline: Ressource nicht verfügbar', {
+                status: 503,
+                statusText: 'Service Unavailable',
+                headers: new Headers({
+                  'Content-Type': 'text/plain'
+                })
+              });
+            });
+        })
+    );
+  }
+});
+
+/**
+ * Message-Handler für Kommunikation mit der App
+ */
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

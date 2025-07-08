@@ -820,3 +820,122 @@ function showSessionsOverview() {
     
     alert(overview);
 }
+
+// App-Update-Funktionalität
+function initAppUpdate() {
+    const updateButton = document.getElementById('update-app-button');
+    
+    if (updateButton) {
+        updateButton.addEventListener('click', updateApp);
+    }
+    
+    // Prüfe auf Service Worker Updates
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            // Neue Version ist verfügbar, zeige Hinweis
+            showUpdateNotification();
+        });
+        
+        // Prüfe regelmäßig auf Updates
+        setInterval(checkForUpdates, 60000); // Alle 60 Sekunden
+    }
+}
+
+async function updateApp() {
+    const updateButton = document.getElementById('update-app-button');
+    
+    try {
+        // Zeige Loading-Animation
+        updateButton.classList.add('updating');
+        updateButton.disabled = true;
+        
+        // Lösche alle Caches
+        if ('caches' in window) {
+            const cacheNames = await caches.keys();
+            await Promise.all(
+                cacheNames.map(cacheName => caches.delete(cacheName))
+            );
+            console.log('Alle Caches wurden gelöscht');
+        }
+        
+        // Unregistriere Service Worker und registriere neu
+        if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(
+                registrations.map(registration => registration.unregister())
+            );
+            console.log('Service Worker wurde deregistriert');
+            
+            // Kurz warten und dann neu registrieren
+            setTimeout(() => {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker neu registriert');
+                        // Seite neu laden
+                        window.location.reload(true);
+                    })
+                    .catch(error => {
+                        console.error('Fehler beim Neuregistrieren:', error);
+                        // Fallback: Einfach neu laden
+                        window.location.reload(true);
+                    });
+            }, 500);
+        } else {
+            // Fallback: Einfach neu laden
+            window.location.reload(true);
+        }
+        
+    } catch (error) {
+        console.error('Fehler beim App-Update:', error);
+        
+        // Entferne Loading-Animation
+        updateButton.classList.remove('updating');
+        updateButton.disabled = false;
+        
+        // Fallback: Einfach neu laden
+        if (confirm('Fehler beim Cache-Update. Soll die Seite neu geladen werden?')) {
+            window.location.reload(true);
+        }
+    }
+}
+
+async function checkForUpdates() {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        try {
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (registration) {
+                await registration.update();
+            }
+        } catch (error) {
+            console.log('Update-Check fehlgeschlagen:', error);
+        }
+    }
+}
+
+function showUpdateNotification() {
+    const updateButton = document.getElementById('update-app-button');
+    if (updateButton) {
+        // Zeige visuellen Hinweis auf verfügbares Update
+        updateButton.style.background = '#FF9800';
+        updateButton.title = 'Update verfügbar! Klicken zum Aktualisieren';
+        
+        // Kurze Animation
+        updateButton.style.animation = 'pulse 2s infinite';
+    }
+}
+
+// CSS für Pulse-Animation hinzufügen
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+`;
+document.head.appendChild(style);
+
+// Update-Funktionalität beim Laden initialisieren
+document.addEventListener('DOMContentLoaded', () => {
+    initAppUpdate();
+});
