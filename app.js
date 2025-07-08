@@ -27,6 +27,14 @@ let currentPosition = null;
 let distanceInterval = null;
 let totalDistance = 50; // Zieldistanz in Metern
 
+// Karten-Variablen
+let map = null;
+let userMarker = null;
+let currentPath = null;
+let allPaths = []; // Speichert alle gezeichneten Pfade
+let isTracking = false;
+let trackingPoints = []; // Aktuelle Tracking-Punkte
+
 // DOM-Elemente
 const timerElement = document.getElementById('timer');
 const startButton = document.getElementById('start-button');
@@ -47,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // UI initialisieren
     renderBumblebeeList();
     initTabSwitching();
+    initMap();
     
     // Event-Listener für Buttons
     startButton.addEventListener('click', toggleTimer);
@@ -162,6 +171,9 @@ function startTimer() {
     
     // GPS-Tracking starten
     startGPSTracking();
+    
+    // Karten-Tracking starten
+    startMapTracking();
 }
 
 function pauseTimer() {
@@ -204,6 +216,9 @@ function stopTimer() {
     
     // GPS-Tracking stoppen
     stopGPSTracking();
+    
+    // Karten-Tracking stoppen
+    stopMapTracking();
 }
 
 function updateTimerDisplay() {
@@ -279,6 +294,9 @@ function resetCounting() {
     
     // GPS-Tracking zurücksetzen
     stopGPSTracking();
+    
+    // Karten-Pfade zurücksetzen
+    resetMapPaths();
 }
 
 // GPS-Tracking-Funktionen
@@ -332,6 +350,9 @@ function startGPSTracking() {
                     
                     // Gib Feedback zur Geschwindigkeit
                     updateSpeedFeedback(distance);
+                    
+                    // Aktualisiere die Kartenposition
+                    updateMapPosition(currentPosition.lat, currentPosition.lng);
                 },
                 (error) => {
                     console.error('Fehler bei der Geolokalisierung:', error);
@@ -407,3 +428,116 @@ function startGPSTracking() {
             speedFeedbackElement.classList.add('good-pace');
         }
     }
+
+// Karten-Funktionen
+function initMap() {
+    // Karte mit Standardposition initialisieren (Deutschland)
+    map = L.map('map').setView([51.1657, 10.4515], 6);
+    
+    // OpenStreetMap Tiles hinzufügen
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    
+    // Benutzerstandort ermitteln und Karte zentrieren
+    if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                
+                // Karte auf Benutzerstandort zentrieren
+                map.setView([lat, lng], 16);
+                
+                // Benutzer-Marker hinzufügen
+                userMarker = L.marker([lat, lng], {
+                    icon: L.divIcon({
+                        className: 'user-marker',
+                        html: '<div style="background-color: #4CAF50; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.3);"></div>',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    })
+                }).addTo(map);
+            },
+            (error) => {
+                console.error('Fehler bei der Geolokalisierung für Karte:', error);
+            },
+            { enableHighAccuracy: true }
+        );
+    }
+}
+
+function startMapTracking() {
+    if (!map) return;
+    
+    isTracking = true;
+    trackingPoints = [];
+    
+    // Neue Pfad-Farbe für jede Messung
+    const colors = ['#FF0000', '#0000FF', '#FF8C00', '#8A2BE2', '#00CED1', '#32CD32'];
+    const pathColor = colors[allPaths.length % colors.length];
+    
+    // Neuen Pfad erstellen
+    currentPath = L.polyline([], {
+        color: pathColor,
+        weight: 3,
+        opacity: 0.8
+    }).addTo(map);
+}
+
+function updateMapPosition(lat, lng) {
+    if (!map || !isTracking) return;
+    
+    // Benutzer-Marker aktualisieren
+    if (userMarker) {
+        userMarker.setLatLng([lat, lng]);
+    }
+    
+    // Punkt zum aktuellen Pfad hinzufügen
+    if (currentPath) {
+        trackingPoints.push([lat, lng]);
+        currentPath.setLatLngs(trackingPoints);
+    }
+    
+    // Karte sanft zum neuen Standort bewegen
+    map.panTo([lat, lng]);
+}
+
+function stopMapTracking() {
+    if (!isTracking || !currentPath) return;
+    
+    isTracking = false;
+    
+    // Aktuellen Pfad zu den gespeicherten Pfaden hinzufügen
+    if (trackingPoints.length > 1) {
+        allPaths.push({
+            path: currentPath,
+            points: [...trackingPoints]
+        });
+    }
+    
+    currentPath = null;
+    trackingPoints = [];
+}
+
+function resetMapPaths() {
+    if (!map) return;
+    
+    // Alle gespeicherten Pfade von der Karte entfernen
+    allPaths.forEach(pathData => {
+        if (pathData.path) {
+            map.removeLayer(pathData.path);
+        }
+    });
+    
+    // Aktuellen Pfad entfernen
+    if (currentPath) {
+        map.removeLayer(currentPath);
+        currentPath = null;
+    }
+    
+    // Arrays zurücksetzen
+    allPaths = [];
+    trackingPoints = [];
+    isTracking = false;
+}

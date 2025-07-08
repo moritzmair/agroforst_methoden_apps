@@ -8,12 +8,18 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
     <div class="app-container">
         <header>
             <h1>Hummelzähler</h1>
         </header>
+        
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
         
         <div class="timer-container">
             <div id="timer">5:00</div>
@@ -74,6 +80,8 @@
         </div>
     </div>
 
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
     <script>
         // Service Worker registrieren für Offline-Funktionalität
