@@ -59,7 +59,7 @@ let countingFinished = false; // Ob die 5 Minuten abgelaufen sind
 let isOnline = navigator.onLine;
 let lastUpdateCheck = null;
 let updateAvailable = false;
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.2';
 
 // Event-Listener
 document.addEventListener('DOMContentLoaded', () => {
@@ -688,6 +688,9 @@ function renderSessionsList() {
                 </div>
             </div>
             <div class="session-actions">
+                <button class="session-button detail-button" onclick="showSessionDetail('${session.id}')">
+                    Details
+                </button>
                 <button class="session-button export-button" onclick="exportSessionData('${session.id}')">
                     Export
                 </button>
@@ -712,8 +715,57 @@ function confirmDeleteSession(sessionId, displayDate) {
     }
 }
 
-// Erweiterte showSessionsOverview Funktion für bessere Darstellung
-function showSessionsOverview() {
+// Neue Funktion für Detailansicht einer einzelnen Zählung
+function showSessionDetail(sessionId) {
+    try {
+        const sessionData = localStorage.getItem(sessionId);
+        if (!sessionData) {
+            alert('Zählung nicht gefunden.');
+            return;
+        }
+        
+        const session = JSON.parse(sessionData);
+        
+        // Erstelle detaillierte Übersicht
+        let detail = `Zählung vom ${session.displayDate}\n\n`;
+        detail += `Gesamtanzahl: ${session.totalCount} Tiere\n`;
+        detail += `Zurückgelegte Distanz: ${session.finalDistance.toFixed(1)}m\n\n`;
+        detail += 'Detaillierte Artenliste:\n';
+        detail += '─'.repeat(30) + '\n';
+        
+        // Sortiere Arten nach Anzahl (absteigend)
+        const sortedBees = session.bumblebees
+            .filter(bee => bee.count > 0)
+            .sort((a, b) => b.count - a.count);
+        
+        if (sortedBees.length > 0) {
+            sortedBees.forEach(bee => {
+                detail += `${bee.name}: ${bee.count}\n`;
+            });
+        } else {
+            detail += 'Keine Tiere gezählt.\n';
+        }
+        
+        // Zeige auch Arten mit 0 Zählungen
+        const emptyBees = session.bumblebees.filter(bee => bee.count === 0);
+        if (emptyBees.length > 0) {
+            detail += '\nNicht gezählte Arten:\n';
+            detail += '─'.repeat(20) + '\n';
+            emptyBees.forEach(bee => {
+                detail += `${bee.name}: 0\n`;
+            });
+        }
+        
+        alert(detail);
+        
+    } catch (error) {
+        console.error('Fehler beim Anzeigen der Session-Details:', error);
+        alert('Fehler beim Laden der Zählungsdetails.');
+    }
+}
+
+// CSV-Download für alle Zählungen
+function exportAllSessionsAsCSV() {
     const sessions = getAllSessions();
     
     if (sessions.length === 0) {
@@ -721,30 +773,55 @@ function showSessionsOverview() {
         return;
     }
     
-    // Erstelle eine detaillierte Übersicht
-    let overview = `Gespeicherte Zählungen (${sessions.length}):\n\n`;
-    
-    sessions.forEach((session, index) => {
-        overview += `${index + 1}. ${session.displayDate}\n`;
-        overview += `   Gesamt: ${session.totalCount} Tiere\n`;
-        overview += `   Distanz: ${session.finalDistance.toFixed(1)}m\n`;
+    try {
+        // CSV-Header
+        let csvContent = 'Datum,Uhrzeit,Art,Anzahl,Gesamtanzahl_Session,Distanz_m\n';
         
-        // Zeige die häufigsten Arten
-        const sortedBees = session.bumblebees
-            .filter(bee => bee.count > 0)
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 3);
+        sessions.forEach(session => {
+            const sessionDate = new Date(session.startTime);
+            const dateStr = sessionDate.toLocaleDateString('de-DE');
+            const timeStr = sessionDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+            
+            // Für jede Art eine Zeile
+            session.bumblebees.forEach(bee => {
+                if (bee.count > 0) {
+                    csvContent += `"${dateStr}","${timeStr}","${bee.name}",${bee.count},${session.totalCount},${session.finalDistance.toFixed(1)}\n`;
+                }
+            });
+            
+            // Falls keine Tiere gezählt wurden, trotzdem eine Zeile für die Session
+            if (session.totalCount === 0) {
+                csvContent += `"${dateStr}","${timeStr}","Keine Zählung",0,0,${session.finalDistance.toFixed(1)}\n`;
+            }
+        });
         
-        if (sortedBees.length > 0) {
-            overview += '   Häufigste: ';
-            overview += sortedBees.map(bee => `${bee.name} (${bee.count})`).join(', ');
-            overview += '\n';
-        }
+        // CSV-Download erstellen
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
         
-        overview += '\n';
-    });
-    
-    alert(overview);
+        // Dateiname mit aktuellem Datum
+        const now = new Date();
+        const filename = `hummelzaehlungen_alle_${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2,'0')}-${now.getDate().toString().padStart(2,'0')}.csv`;
+        a.download = filename;
+        
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        alert(`CSV-Datei mit ${sessions.length} Zählungen wurde heruntergeladen.`);
+        
+    } catch (error) {
+        console.error('Fehler beim Erstellen der CSV-Datei:', error);
+        alert('Fehler beim Erstellen der CSV-Datei.');
+    }
+}
+
+// Erweiterte showSessionsOverview Funktion - jetzt für CSV-Download
+function showSessionsOverview() {
+    exportAllSessionsAsCSV();
 }
 
 // App-Update-Funktionalität
@@ -768,6 +845,20 @@ function initAppUpdate() {
             updateAvailable = true;
             updateUpdateStatus();
         });
+    }
+    
+    // Frage nach Benachrichtigungserlaubnis
+    requestNotificationPermission();
+}
+
+async function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        try {
+            const permission = await Notification.requestPermission();
+            console.log('Benachrichtigungserlaubnis:', permission);
+        } catch (error) {
+            console.log('Fehler beim Anfordern der Benachrichtigungserlaubnis:', error);
+        }
     }
 }
 
@@ -795,6 +886,14 @@ async function checkForUpdatesOnStartup() {
     }
     
     await performUpdateCheck();
+    
+    // Starte automatische Update-Prüfung alle 5 Minuten
+    setInterval(async () => {
+        if (isOnline && !updateAvailable) {
+            console.log('Automatische Update-Prüfung...');
+            await performUpdateCheck();
+        }
+    }, 5 * 60 * 1000); // 5 Minuten
 }
 
 async function manualUpdateCheck() {
@@ -829,6 +928,11 @@ async function performUpdateCheck() {
         lastUpdateCheck = new Date();
         saveLastUpdateCheck();
         
+        // Prüfe auf neue Version in der Manifest-Datei
+        const manifestUpdateAvailable = await checkManifestVersion();
+        
+        // Prüfe auf Service Worker Updates
+        let serviceWorkerUpdateAvailable = false;
         if ('serviceWorker' in navigator) {
             const registration = await navigator.serviceWorker.getRegistration();
             if (registration) {
@@ -836,16 +940,50 @@ async function performUpdateCheck() {
                 
                 // Prüfe, ob ein neuer Service Worker wartet
                 if (registration.waiting) {
-                    updateAvailable = true;
+                    serviceWorkerUpdateAvailable = true;
                 }
             }
         }
+        
+        // Update ist verfügbar, wenn entweder Manifest oder Service Worker aktualisiert wurden
+        updateAvailable = manifestUpdateAvailable || serviceWorkerUpdateAvailable;
         
         updateUpdateStatus();
         
     } catch (error) {
         console.log('Update-Check fehlgeschlagen:', error);
         updateUpdateStatus();
+    }
+}
+
+async function checkManifestVersion() {
+    try {
+        // Lade die aktuelle Manifest-Datei vom Server
+        const response = await fetch('./manifest.json?t=' + Date.now(), {
+            cache: 'no-cache'
+        });
+        
+        if (!response.ok) {
+            console.log('Manifest konnte nicht geladen werden');
+            return false;
+        }
+        
+        const serverManifest = await response.json();
+        const serverVersion = serverManifest.version;
+        
+        console.log(`Lokale Version: ${APP_VERSION}, Server Version: ${serverVersion}`);
+        
+        // Vergleiche Versionen
+        if (serverVersion && serverVersion !== APP_VERSION) {
+            console.log('Neue Version verfügbar:', serverVersion);
+            return true;
+        }
+        
+        return false;
+        
+    } catch (error) {
+        console.log('Fehler beim Prüfen der Manifest-Version:', error);
+        return false;
     }
 }
 
@@ -873,7 +1011,10 @@ async function performAppUpdate() {
             }
         }
         
-        // Seite neu laden
+        // Update-Status zurücksetzen
+        updateAvailable = false;
+        
+        // Seite mit Cache-Bypass neu laden
         setTimeout(() => {
             window.location.reload(true);
         }, 1000);
@@ -920,10 +1061,18 @@ function updateUpdateStatus() {
         updateButton.innerHTML = '<span class="update-icon">📡</span><span class="update-text">Offline</span>';
         updateButton.disabled = true;
     } else if (updateAvailable) {
-        statusElement.textContent = 'Update verfügbar!';
+        statusElement.textContent = 'Neue Version verfügbar!';
         statusElement.className = 'status-text update-available';
         updateButton.innerHTML = '<span class="update-icon">⬇️</span><span class="update-text">Jetzt aktualisieren</span>';
         updateButton.disabled = false;
+        
+        // Zeige eine Benachrichtigung für verfügbare Updates
+        if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Hummelzähler Update', {
+                body: 'Eine neue Version der App ist verfügbar!',
+                icon: 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'512\' height=\'512\' viewBox=\'0 0 512 512\'%3E%3Crect width=\'512\' height=\'512\' fill=\'%234CAF50\' rx=\'128\' ry=\'128\'/%3E%3Ccircle cx=\'256\' cy=\'256\' r=\'200\' fill=\'%23FFC107\'/%3E%3Cellipse cx=\'256\' cy=\'200\' rx=\'160\' ry=\'80\' fill=\'%23333\'/%3E%3Cellipse cx=\'256\' cy=\'320\' rx=\'160\' ry=\'80\' fill=\'%23333\'/%3E%3Ccircle cx=\'180\' cy=\'180\' r=\'20\' fill=\'white\'/%3E%3Ccircle cx=\'332\' cy=\'180\' r=\'20\' fill=\'white\'/%3E%3C/svg%3E'
+            });
+        }
     } else {
         statusElement.textContent = 'App ist auf dem neuesten Stand';
         statusElement.className = 'status-text up-to-date';

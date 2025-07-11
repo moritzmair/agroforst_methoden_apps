@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hummelzaehler-offline-v2';
+const CACHE_NAME = 'hummelzaehler-offline-v3';
 
 // Alle Ressourcen, die für die Offline-Funktionalität benötigt werden
 const ASSETS_TO_CACHE = [

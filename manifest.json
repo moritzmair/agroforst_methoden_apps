@@ -1,7 +1,7 @@
 {
   "name": "Hummelzähler",
   "short_name": "Hummelzähler",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "App zum Zählen von Hummeln während einer Feldbegehung",
   "start_url": "./",
   "display": "standalone",

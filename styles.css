@@ -337,6 +337,15 @@ h1, h2 {
     transition: background-color 0.3s;
 }
 
+.detail-button {
+    background-color: var(--secondary-color);
+    color: var(--dark-color);
+}
+
+.detail-button:hover {
+    background-color: #e6a100;
+}
+
 .export-button {
     background-color: var(--primary-color);
     color: white;
