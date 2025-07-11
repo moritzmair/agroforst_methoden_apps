@@ -91,20 +91,6 @@ h1, h2 {
     margin-bottom: 1rem;
 }
 
-.map-container {
-    margin-bottom: 1rem;
-    padding: 1rem;
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-}
-
-#map {
-    height: 200px;
-    width: 100%;
-    border-radius: 4px;
-    z-index: 1;
-}
 
 .timer-container {
     text-align: center;
@@ -231,6 +217,58 @@ h1, h2 {
     display: none;
 }
 
+/* Verwaltung benutzerdefinierter Arten */
+.manage-species-container {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #ddd;
+}
+
+.manage-species-container h3 {
+    margin-bottom: 1rem;
+    color: var(--dark-color);
+    font-size: 1.1rem;
+}
+
+.manage-species-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.species-select {
+    flex: 1;
+    min-width: 200px;
+    padding: 0.75rem;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+    background-color: white;
+    color: var(--dark-color);
+}
+
+.species-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.species-select option {
+    padding: 0.5rem;
+}
+
+@media (max-width: 480px) {
+    .manage-species-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .species-select {
+        min-width: unset;
+        width: 100%;
+    }
+}
+
 .distance-tracking {
     margin-top: 1.5rem;
     padding-top: 1rem;
@@ -267,29 +305,10 @@ h1, h2 {
     z-index: 1;
 }
 
-.current-position {
-    position: absolute;
-    height: 100%;
-    width: 4px;
-    background-color: var(--primary-color);
-    top: 0;
-    left: 0;
-    z-index: 2;
-}
-
 .distance-info {
-    display: flex;
-    justify-content: space-between;
     font-size: 0.9rem;
     margin-top: 0.5rem;
-}
-
-.too-slow {
-    color: var(--danger-color);
-}
-
-.too-fast {
-    color: var(--warning-color);
+    text-align: center;
 }
 
 .good-pace {
@@ -448,4 +467,130 @@ h1, h2 {
     border: 2px dashed var(--secondary-color);
     padding: 0.5rem;
     border-radius: 8px;
+}
+
+/* Seitennavigation */
+.page {
+    width: 100%;
+}
+
+.page.hidden {
+    display: none;
+}
+
+/* Startseite Styles */
+.main-action {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding: 2rem;
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.new-counting-button {
+    background: linear-gradient(135deg, var(--primary-color), #66BB6A);
+    color: white;
+    border: none;
+    border-radius: 16px;
+    padding: 1.5rem 3rem;
+    font-size: 1.4rem;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.3);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 80px;
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.new-counting-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(76, 175, 80, 0.4);
+    background: linear-gradient(135deg, #66BB6A, var(--primary-color));
+}
+
+.new-counting-button:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+}
+
+/* Zählungsseite Styles */
+.page-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.page-header h2 {
+    margin: 0;
+    text-align: center;
+    color: var(--dark-color);
+}
+
+/* Angepasste Timer-Buttons für Zählungsseite */
+#counting-page .timer-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+#counting-page .timer-buttons button {
+    flex: 1;
+    min-width: 120px;
+    max-width: 150px;
+}
+
+/* Responsive Design für kleinere Bildschirme */
+@media (max-width: 480px) {
+    .new-counting-button {
+        padding: 1.2rem 2rem;
+        font-size: 1.2rem;
+        min-height: 70px;
+    }
+    
+    .page-header {
+        padding: 0.8rem;
+    }
+    
+    .page-header h2 {
+        font-size: 1.3rem;
+    }
+    
+    #counting-page .timer-buttons {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    #counting-page .timer-buttons button {
+        width: 100%;
+        max-width: 200px;
+    }
+}
+
+/* Verbesserte Manage Species Container für Startseite */
+#home-page .manage-species-container {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    border-top: none;
+    margin-top: 0;
+}
+
+#home-page .manage-species-container h2 {
+    margin-bottom: 1rem;
+    color: var(--dark-color);
 }

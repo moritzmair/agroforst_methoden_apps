@@ -1,5 +1,5 @@
-// Datenstruktur für die Hummeln
-let bumblebees = [
+// Standard-Datenstruktur für die Hummeln (diese Arten werden immer angezeigt)
+const defaultBumblebees = [
     { id: 1, name: "Ackerhummel", count: 0 },
     { id: 2, name: "Steinhummel", count: 0 },
     { id: 3, name: "Erdhummel", count: 0 },
@@ -15,6 +15,9 @@ let bumblebees = [
     { id: 13, name: "unbestimmt", count: 0 }
 ];
 
+// Aktuelle Hummel-Liste (wird mit Standard-Arten initialisiert)
+let bumblebees = [...defaultBumblebees];
+
 // Timer-Variablen
 let timerInterval;
 let timeLeft = 5 * 60; // 5 Minuten in Sekunden
@@ -22,34 +25,35 @@ let isTimerRunning = false;
 let isPaused = false;
 let sessionStartTime = null; // Zeitpunkt des Zählungsbeginns
 
-// GPS-Tracking-Variablen
-let startPosition = null;
-let currentPosition = null;
+// Distanz-Tracking-Variablen
 let distanceInterval = null;
 let totalDistance = 50; // Zieldistanz in Metern
 
-// Karten-Variablen
-let map = null;
-let userMarker = null;
-let currentPath = null;
-let allPaths = []; // Speichert alle gezeichneten Pfade
-let isTracking = false;
-let trackingPoints = []; // Aktuelle Tracking-Punkte
-
 // DOM-Elemente
 const timerElement = document.getElementById('timer');
-const startButton = document.getElementById('start-button');
-const stopSaveButton = document.getElementById('stop-save-button');
-const resetButton = document.getElementById('reset-button');
 const bumblebeeList = document.getElementById('bumblebee-list');
 const addBumblebeeButton = document.getElementById('add-bumblebee');
 const distanceTrackingElement = document.getElementById('distance-tracking');
-const currentDistanceElement = document.getElementById('current-distance');
-const speedFeedbackElement = document.getElementById('speed-feedback');
+const targetDistanceElement = document.getElementById('target-distance');
 const targetPositionElement = document.getElementById('target-position');
-const currentPositionElement = document.getElementById('current-position');
 const showSessionsButton = document.getElementById('show-sessions');
 const sessionsListElement = document.getElementById('sessions-list');
+const customSpeciesSelect = document.getElementById('custom-species-select');
+const deleteSpeciesButton = document.getElementById('delete-species-button');
+
+// Neue DOM-Elemente für die Seitennavigation
+const homePage = document.getElementById('home-page');
+const countingPage = document.getElementById('counting-page');
+const newCountingButton = document.getElementById('new-counting-button');
+const startCountingButton = document.getElementById('start-counting-button');
+const pauseButton = document.getElementById('pause-button');
+const cancelButton = document.getElementById('cancel-button');
+const saveButton = document.getElementById('save-button');
+const countingStatus = document.getElementById('counting-status');
+
+// App-Status
+let currentPage = 'home'; // 'home' oder 'counting'
+let countingFinished = false; // Ob die 5 Minuten abgelaufen sind
 
 // Event-Listener
 document.addEventListener('DOMContentLoaded', () => {
@@ -57,18 +61,98 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFromLocalStorage();
     
     // UI initialisieren
-    renderBumblebeeList();
+    showHomePage();
     renderSessionsList();
+    renderCustomSpeciesSelect();
     initTabSwitching();
-    initMap();
     
-    // Event-Listener für Buttons
-    startButton.addEventListener('click', toggleTimer);
-    stopSaveButton.addEventListener('click', stopAndSaveTimer);
-    resetButton.addEventListener('click', confirmReset);
+    // Event-Listener für Navigation
+    newCountingButton.addEventListener('click', showCountingPage);
+    
+    // Event-Listener für Zählungsseite
+    startCountingButton.addEventListener('click', startTimer);
+    pauseButton.addEventListener('click', toggleTimer);
+    cancelButton.addEventListener('click', cancelCounting);
+    saveButton.addEventListener('click', saveCounting);
     addBumblebeeButton.addEventListener('click', addNewBumblebee);
+    
+    // Event-Listener für Startseite
     showSessionsButton.addEventListener('click', showSessionsOverview);
+    
+    // Event-Listener für Arten-Verwaltung
+    customSpeciesSelect.addEventListener('change', updateDeleteButton);
+    deleteSpeciesButton.addEventListener('click', deleteCustomSpecies);
 });
+
+// Seitennavigation
+function showHomePage() {
+    currentPage = 'home';
+    homePage.classList.remove('hidden');
+    countingPage.classList.add('hidden');
+    
+    // Timer zurücksetzen falls nötig
+    if (isTimerRunning) {
+        stopTimer();
+    }
+    resetCountingState();
+}
+
+function showCountingPage() {
+    currentPage = 'counting';
+    homePage.classList.add('hidden');
+    countingPage.classList.remove('hidden');
+    
+    // Zählungsseite vorbereiten
+    resetCountingState();
+    renderBumblebeeList();
+    
+    // UI für "bereit zum Zählen" Status
+    countingStatus.textContent = 'Bereit zum Zählen';
+    startCountingButton.classList.remove('hidden');
+    pauseButton.classList.add('hidden');
+    saveButton.classList.add('hidden');
+}
+
+function cancelCounting() {
+    if (isTimerRunning || countingFinished) {
+        if (confirm('Möchtest du die Zählung wirklich abbrechen? Alle Daten gehen verloren.')) {
+            showHomePage();
+        }
+    } else {
+        // Wenn noch nicht gestartet, direkt zurück
+        showHomePage();
+    }
+}
+
+function saveCounting() {
+    if (countingFinished) {
+        saveCountingSession();
+        alert('Zählung wurde gespeichert.');
+        showHomePage();
+    }
+}
+
+function resetCountingState() {
+    timeLeft = 5 * 60;
+    updateTimerDisplay();
+    sessionStartTime = null;
+    countingFinished = false;
+    
+    // Zähler zurücksetzen
+    bumblebees.forEach(bee => {
+        bee.count = 0;
+    });
+    
+    // UI-Elemente zurücksetzen
+    pauseButton.textContent = 'Pausieren';
+    pauseButton.classList.add('hidden');
+    saveButton.classList.add('hidden');
+    startCountingButton.classList.remove('hidden');
+    timerElement.classList.remove('timer-active', 'timer-paused');
+    
+    // Distanz-Tracking verstecken
+    stopDistanceTracking();
+}
 
 // Funktion zum Rendern der Hummel-Liste
 function renderBumblebeeList() {
@@ -133,14 +217,64 @@ function addNewBumblebee() {
         const newId = bumblebees.length > 0 ? Math.max(...bumblebees.map(bee => bee.id)) + 1 : 1;
         bumblebees.push({ id: newId, name: newName.trim(), count: 0 });
         renderBumblebeeList();
+        renderCustomSpeciesSelect();
         saveToLocalStorage();
+    }
+}
+
+// Funktionen für die Verwaltung benutzerdefinierter Arten
+function renderCustomSpeciesSelect() {
+    // Dropdown leeren
+    customSpeciesSelect.innerHTML = '<option value="">Wähle eine Art zum Löschen...</option>';
+    
+    // Finde alle benutzerdefinierten Arten (nicht in den Standard-Arten enthalten)
+    const customSpecies = bumblebees.filter(bee =>
+        !defaultBumblebees.some(defaultBee => defaultBee.id === bee.id)
+    );
+    
+    // Füge benutzerdefinierte Arten zum Dropdown hinzu
+    customSpecies.forEach(bee => {
+        const option = document.createElement('option');
+        option.value = bee.id;
+        option.textContent = bee.name;
+        customSpeciesSelect.appendChild(option);
+    });
+    
+    // Aktualisiere den Zustand des Löschen-Buttons
+    updateDeleteButton();
+}
+
+function updateDeleteButton() {
+    const selectedValue = customSpeciesSelect.value;
+    deleteSpeciesButton.disabled = !selectedValue;
+}
+
+function deleteCustomSpecies() {
+    const selectedId = parseInt(customSpeciesSelect.value);
+    if (!selectedId) return;
+    
+    const beeToDelete = bumblebees.find(bee => bee.id === selectedId);
+    if (!beeToDelete) return;
+    
+    // Bestätigung vom Benutzer
+    if (confirm(`Möchtest du die Art "${beeToDelete.name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
+        // Entferne die Art aus dem Array
+        bumblebees = bumblebees.filter(bee => bee.id !== selectedId);
+        
+        // Aktualisiere die UI
+        renderBumblebeeList();
+        renderCustomSpeciesSelect();
+        saveToLocalStorage();
+        
+        alert(`Die Art "${beeToDelete.name}" wurde erfolgreich gelöscht.`);
     }
 }
 
 // Timer-Funktionen
 function toggleTimer() {
     if (!isTimerRunning) {
-        startTimer();
+        // Sollte nicht passieren, da Timer automatisch beim Seitenwechsel startet
+        return;
     } else if (isPaused) {
         resumeTimer();
     } else {
@@ -152,27 +286,10 @@ function startTimer() {
     // Timer zurücksetzen
     timeLeft = 5 * 60;
     updateTimerDisplay();
+    countingFinished = false;
     
     // Startzeitpunkt speichern
     sessionStartTime = new Date();
-    
-    // Timer starten
-    timerInterval = setInterval(() => {
-        timeLeft--;
-        updateTimerDisplay();
-        
-        if (timeLeft <= 0) {
-            stopTimer();
-            saveCountingSession();
-            alert('Zeit abgelaufen! Die Zählung ist beendet und wurde gespeichert.');
-        }
-    }, 1000);
-    
-    isTimerRunning = true;
-    isPaused = false;
-    startButton.textContent = 'Zählung pausieren';
-    stopSaveButton.classList.remove('hidden');
-    timerElement.classList.add('timer-active');
     
     // Zähler zurücksetzen
     bumblebees.forEach(bee => {
@@ -181,19 +298,39 @@ function startTimer() {
     renderBumblebeeList();
     saveToLocalStorage();
     
-    // GPS-Tracking starten
-    startGPSTracking();
+    // Timer starten
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        updateTimerDisplay();
+        
+        if (timeLeft <= 0) {
+            finishTimer();
+        }
+    }, 1000);
     
-    // Karten-Tracking starten
-    startMapTracking();
+    isTimerRunning = true;
+    isPaused = false;
+    
+    // UI aktualisieren
+    countingStatus.textContent = 'Zählung läuft';
+    startCountingButton.classList.add('hidden');
+    pauseButton.classList.remove('hidden');
+    pauseButton.textContent = 'Pausieren';
+    timerElement.classList.add('timer-active');
+    
+    // Distanz-Tracking starten
+    startDistanceTracking();
 }
 
 function pauseTimer() {
     clearInterval(timerInterval);
-    clearInterval(distanceInterval);
     isPaused = true;
-    startButton.textContent = 'Zählung fortsetzen';
+    countingStatus.textContent = 'Zählung pausiert';
+    pauseButton.textContent = 'Fortsetzen';
     timerElement.classList.add('timer-paused');
+    
+    // Distanz-Tracking pausieren (aber Position beibehalten)
+    clearInterval(distanceInterval);
 }
 
 function resumeTimer() {
@@ -202,47 +339,53 @@ function resumeTimer() {
         updateTimerDisplay();
         
         if (timeLeft <= 0) {
-            stopTimer();
-            alert('Zeit abgelaufen! Die Zählung ist beendet.');
+            finishTimer();
         }
     }, 1000);
     
-    // GPS-Tracking fortsetzen
-    if (startPosition) {
-        startDistanceTracking();
-    }
-    
     isPaused = false;
-    startButton.textContent = 'Zählung pausieren';
+    countingStatus.textContent = 'Zählung läuft';
+    pauseButton.textContent = 'Pausieren';
     timerElement.classList.remove('timer-paused');
+    
+    // Distanz-Tracking fortsetzen
+    startDistanceTracking();
+}
+
+function finishTimer() {
+    clearInterval(timerInterval);
+    isTimerRunning = false;
+    isPaused = false;
+    countingFinished = true;
+    
+    // UI aktualisieren
+    countingStatus.textContent = 'Zählung beendet - Speichern möglich';
+    pauseButton.classList.add('hidden');
+    cancelButton.classList.add('hidden');
+    saveButton.classList.remove('hidden');
+    timerElement.classList.remove('timer-active', 'timer-paused');
+    
+    // Distanz-Tracking stoppen
+    stopDistanceTracking();
+    
+    alert('Zeit abgelaufen! Du kannst jetzt noch Arten nachtragen und dann speichern.');
 }
 
 function stopTimer() {
     clearInterval(timerInterval);
-    clearInterval(distanceInterval);
     isTimerRunning = false;
     isPaused = false;
-    startButton.textContent = 'Zählung starten';
-    stopSaveButton.classList.add('hidden');
-    timerElement.classList.remove('timer-active');
-    timerElement.classList.remove('timer-paused');
+    countingFinished = false;
     
-    // GPS-Tracking stoppen
-    stopGPSTracking();
+    // UI zurücksetzen
+    pauseButton.classList.remove('hidden');
+    cancelButton.classList.remove('hidden');
+    saveButton.classList.add('hidden');
+    pauseButton.textContent = 'Pausieren';
+    timerElement.classList.remove('timer-active', 'timer-paused');
     
-    // Karten-Tracking stoppen
-    stopMapTracking();
-}
-
-function stopAndSaveTimer() {
-    if (isTimerRunning && sessionStartTime) {
-        if (confirm('Möchtest du die aktuelle Zählung speichern?')) {
-            saveCountingSession();
-            alert('Zählung wurde gespeichert.');
-        }
-    }
-    
-    stopTimer();
+    // Distanz-Tracking stoppen
+    stopDistanceTracking();
 }
 
 function updateTimerDisplay() {
@@ -284,288 +427,60 @@ function loadFromLocalStorage() {
     try {
         const savedBumblebees = localStorage.getItem('bumblebees');
         if (savedBumblebees) {
-            bumblebees = JSON.parse(savedBumblebees);
+            const savedData = JSON.parse(savedBumblebees);
+            
+            // Starte immer mit den Standard-Arten
+            bumblebees = [...defaultBumblebees];
+            
+            // Aktualisiere Zählerstände für Standard-Arten und füge zusätzliche Arten hinzu
+            savedData.forEach(savedBee => {
+                const existingBeeIndex = bumblebees.findIndex(bee => bee.id === savedBee.id);
+                if (existingBeeIndex !== -1) {
+                    // Aktualisiere Zählerstand für existierende Standard-Art
+                    bumblebees[existingBeeIndex].count = savedBee.count;
+                } else {
+                    // Füge zusätzliche (benutzerdefinierte) Art hinzu
+                    bumblebees.push(savedBee);
+                }
+            });
         }
     } catch (error) {
         console.error('Fehler beim Laden aus dem localStorage:', error);
+        // Bei Fehler: Verwende Standard-Arten
+        bumblebees = [...defaultBumblebees];
     }
 }
 
-// Funktion zum Bestätigen des Neustarts
-function confirmReset() {
-    if (isTimerRunning) {
-        if (confirm('Möchtest du die Zählung wirklich neu starten? Alle aktuellen Daten werden zurückgesetzt.')) {
-            resetCounting();
-        }
-    } else {
-        resetCounting();
-    }
+// Distanz-Tracking-Funktionen
+function startDistanceTracking() {
+    // Zeige das Tracking-Element an (ist auf der Zählungsseite immer sichtbar)
+    
+    // Aktualisiere die Anzeige jede Sekunde
+    distanceInterval = setInterval(() => {
+        updateDistanceVisualization();
+    }, 1000);
 }
 
-// Funktion zum Zurücksetzen der Zählung
-function resetCounting() {
-    // Timer stoppen und zurücksetzen
-    stopTimer();
-    timeLeft = 5 * 60;
-    updateTimerDisplay();
-    sessionStartTime = null;
-    
-    // Zähler zurücksetzen
-    bumblebees.forEach(bee => {
-        bee.count = 0;
-    });
-    renderBumblebeeList();
-    saveToLocalStorage();
-    
-    // GPS-Tracking zurücksetzen
-    stopGPSTracking();
-    
-    // Karten-Pfade zurücksetzen
-    resetMapPaths();
+function stopDistanceTracking() {
+    clearInterval(distanceInterval);
+    targetDistanceElement.textContent = '0';
+    targetPositionElement.style.width = '0%';
 }
 
-// GPS-Tracking-Funktionen
-function startGPSTracking() {
-        if ('geolocation' in navigator) {
-            // Zeige das Tracking-Element an
-            distanceTrackingElement.classList.remove('hidden');
-            
-            // Startposition erfassen
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    startPosition = {
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                    };
-                    currentPosition = startPosition;
-                    
-                    // Distanz-Tracking starten
-                    startDistanceTracking();
-                },
-                (error) => {
-                    console.error('Fehler bei der Geolokalisierung:', error);
-                    alert('GPS-Tracking konnte nicht gestartet werden. Bitte erlaube den Zugriff auf deinen Standort.');
-                    distanceTrackingElement.classList.add('hidden');
-                },
-                { enableHighAccuracy: true }
-            );
-        } else {
-            console.error('Geolocation wird von diesem Browser nicht unterstützt.');
-            alert('Dein Browser unterstützt kein GPS-Tracking.');
-            distanceTrackingElement.classList.add('hidden');
-        }
-    }
+// Aktualisiert die Visualisierung der Sollposition
+function updateDistanceVisualization() {
+    // Berechne, wo man sein sollte (basierend auf der verstrichenen Zeit)
+    const elapsedTime = (5 * 60) - timeLeft;
+    const targetDistance = (elapsedTime / (5 * 60)) * totalDistance;
     
-    function startDistanceTracking() {
-        // Aktualisiere die Position jede Sekunde
-        distanceInterval = setInterval(() => {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    currentPosition = {
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                    };
-                    
-                    // Berechne die zurückgelegte Distanz
-                    const distance = calculateDistance(startPosition, currentPosition);
-                    currentDistanceElement.textContent = distance.toFixed(1);
-                    
-                    // Aktualisiere die Visualisierung
-                    updateDistanceVisualization(distance);
-                    
-                    // Gib Feedback zur Geschwindigkeit
-                    updateSpeedFeedback(distance);
-                    
-                    // Aktualisiere die Kartenposition
-                    updateMapPosition(currentPosition.lat, currentPosition.lng);
-                },
-                (error) => {
-                    console.error('Fehler bei der Geolokalisierung:', error);
-                },
-                { enableHighAccuracy: true }
-            );
-        }, 1000);
-    }
+    // Aktualisiere die Anzeige
+    targetDistanceElement.textContent = targetDistance.toFixed(1);
     
-    function stopGPSTracking() {
-        clearInterval(distanceInterval);
-        startPosition = null;
-        currentPosition = null;
-        distanceTrackingElement.classList.add('hidden');
-        currentDistanceElement.textContent = '0';
-        speedFeedbackElement.textContent = '-';
-        speedFeedbackElement.className = '';
-        targetPositionElement.style.width = '0%';
-        currentPositionElement.style.left = '0%';
-    }
-    
-    // Berechnet die Distanz zwischen zwei GPS-Punkten in Metern (Haversine-Formel)
-    function calculateDistance(pos1, pos2) {
-        const R = 6371e3; // Erdradius in Metern
-        const φ1 = pos1.lat * Math.PI / 180;
-        const φ2 = pos2.lat * Math.PI / 180;
-        const Δφ = (pos2.lat - pos1.lat) * Math.PI / 180;
-        const Δλ = (pos2.lng - pos1.lng) * Math.PI / 180;
-    
-        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                  Math.cos(φ1) * Math.cos(φ2) *
-                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    
-        return R * c; // in Metern
-    }
-    
-    // Aktualisiert die Visualisierung der Distanz
-    function updateDistanceVisualization(distance) {
-        // Berechne, wo man sein sollte (basierend auf der verstrichenen Zeit)
-        const elapsedTime = (5 * 60) - timeLeft;
-        const targetDistance = (elapsedTime / (5 * 60)) * totalDistance;
-        
-        // Aktualisiere die Positionsanzeigen (in Prozent)
-        const targetPercent = (targetDistance / totalDistance) * 100;
-        const currentPercent = (distance / totalDistance) * 100;
-        
-        targetPositionElement.style.width = `${Math.min(targetPercent, 100)}%`;
-        currentPositionElement.style.left = `${Math.min(currentPercent, 100)}%`;
-    }
-    
-    // Gibt Feedback zur Geschwindigkeit
-    function updateSpeedFeedback(distance) {
-        // Berechne, wo man sein sollte (basierend auf der verstrichenen Zeit)
-        const elapsedTime = (5 * 60) - timeLeft;
-        const targetDistance = (elapsedTime / (5 * 60)) * totalDistance;
-        
-        // Berechne die Abweichung
-        const deviation = distance - targetDistance;
-        
-        // Entferne alle Klassen
-        speedFeedbackElement.classList.remove('too-slow', 'too-fast', 'good-pace');
-        
-        // Setze das Feedback basierend auf der Abweichung
-        if (deviation < -5) {
-            speedFeedbackElement.textContent = 'Zu langsam';
-            speedFeedbackElement.classList.add('too-slow');
-        } else if (deviation > 5) {
-            speedFeedbackElement.textContent = 'Zu schnell';
-            speedFeedbackElement.classList.add('too-fast');
-        } else {
-            speedFeedbackElement.textContent = 'Gutes Tempo';
-            speedFeedbackElement.classList.add('good-pace');
-        }
-    }
-
-// Karten-Funktionen
-function initMap() {
-    // Karte mit Standardposition initialisieren (Deutschland)
-    map = L.map('map').setView([51.1657, 10.4515], 6);
-    
-    // OpenStreetMap Tiles hinzufügen
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
-    
-    // Benutzerstandort ermitteln und Karte zentrieren
-    if ('geolocation' in navigator) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                
-                // Karte auf Benutzerstandort zentrieren
-                map.setView([lat, lng], 16);
-                
-                // Benutzer-Marker hinzufügen
-                userMarker = L.marker([lat, lng], {
-                    icon: L.divIcon({
-                        className: 'user-marker',
-                        html: '<div style="background-color: #4CAF50; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.3);"></div>',
-                        iconSize: [16, 16],
-                        iconAnchor: [8, 8]
-                    })
-                }).addTo(map);
-            },
-            (error) => {
-                console.error('Fehler bei der Geolokalisierung für Karte:', error);
-            },
-            { enableHighAccuracy: true }
-        );
-    }
+    // Aktualisiere die Positionsanzeige (in Prozent)
+    const targetPercent = (targetDistance / totalDistance) * 100;
+    targetPositionElement.style.width = `${Math.min(targetPercent, 100)}%`;
 }
 
-function startMapTracking() {
-    if (!map) return;
-    
-    isTracking = true;
-    trackingPoints = [];
-    
-    // Neue Pfad-Farbe für jede Messung
-    const colors = ['#FF0000', '#0000FF', '#FF8C00', '#8A2BE2', '#00CED1', '#32CD32'];
-    const pathColor = colors[allPaths.length % colors.length];
-    
-    // Neuen Pfad erstellen
-    currentPath = L.polyline([], {
-        color: pathColor,
-        weight: 3,
-        opacity: 0.8
-    }).addTo(map);
-}
-
-function updateMapPosition(lat, lng) {
-    if (!map || !isTracking) return;
-    
-    // Benutzer-Marker aktualisieren
-    if (userMarker) {
-        userMarker.setLatLng([lat, lng]);
-    }
-    
-    // Punkt zum aktuellen Pfad hinzufügen
-    if (currentPath) {
-        trackingPoints.push([lat, lng]);
-        currentPath.setLatLngs(trackingPoints);
-    }
-    
-    // Karte sanft zum neuen Standort bewegen
-    map.panTo([lat, lng]);
-}
-
-function stopMapTracking() {
-    if (!isTracking || !currentPath) return;
-    
-    isTracking = false;
-    
-    // Aktuellen Pfad zu den gespeicherten Pfaden hinzufügen
-    if (trackingPoints.length > 1) {
-        allPaths.push({
-            path: currentPath,
-            points: [...trackingPoints]
-        });
-    }
-    
-    currentPath = null;
-    trackingPoints = [];
-}
-
-function resetMapPaths() {
-    if (!map) return;
-    
-    // Alle gespeicherten Pfade von der Karte entfernen
-    allPaths.forEach(pathData => {
-        if (pathData.path) {
-            map.removeLayer(pathData.path);
-        }
-    });
-    
-    // Aktuellen Pfad entfernen
-    if (currentPath) {
-        map.removeLayer(currentPath);
-        currentPath = null;
-    }
-    
-    // Arrays zurücksetzen
-    allPaths = [];
-    trackingPoints = [];
-    isTracking = false;
-}
 
 // Funktionen für Speicherstände
 function saveCountingSession() {
@@ -590,10 +505,7 @@ function saveCountingSession() {
         displayDate: displayDate,
         bumblebees: JSON.parse(JSON.stringify(bumblebees)), // Deep copy
         totalCount: totalCount,
-        gpsData: {
-            startPosition: startPosition,
-            finalDistance: (startPosition && currentPosition) ? calculateDistance(startPosition, currentPosition) : 0
-        }
+        finalDistance: totalDistance // Immer die volle Zieldistanz, da zeitbasiert
     };
     
     try {
@@ -694,7 +606,7 @@ function showSessionsOverview() {
     sessions.forEach((session, index) => {
         overview += `${index + 1}. ${session.displayDate}\n`;
         overview += `   Gesamt: ${session.totalCount} Tiere\n`;
-        overview += `   Distanz: ${session.gpsData.finalDistance.toFixed(1)}m\n\n`;
+        overview += `   Distanz: ${session.finalDistance.toFixed(1)}m\n\n`;
     });
     
     alert(overview);
@@ -721,7 +633,7 @@ function exportSessionData(sessionId) {
         });
         
         csvData += `\nGesamtanzahl,${session.totalCount}\n`;
-        csvData += `Zurückgelegte Distanz,${session.gpsData.finalDistance.toFixed(1)}m\n`;
+        csvData += `Zurückgelegte Distanz,${session.finalDistance.toFixed(1)}m\n`;
         
         // Erstelle einen Download-Link
         const blob = new Blob([csvData], { type: 'text/plain;charset=utf-8' });
@@ -758,7 +670,7 @@ function renderSessionsList() {
                 <div class="session-date">${session.displayDate}</div>
                 <div class="session-details">
                     Gesamt: ${session.totalCount} Tiere |
-                    Distanz: ${session.gpsData.finalDistance.toFixed(1)}m
+                    Distanz: ${session.finalDistance.toFixed(1)}m
                 </div>
             </div>
             <div class="session-actions">
@@ -801,7 +713,7 @@ function showSessionsOverview() {
     sessions.forEach((session, index) => {
         overview += `${index + 1}. ${session.displayDate}\n`;
         overview += `   Gesamt: ${session.totalCount} Tiere\n`;
-        overview += `   Distanz: ${session.gpsData.finalDistance.toFixed(1)}m\n`;
+        overview += `   Distanz: ${session.finalDistance.toFixed(1)}m\n`;
         
         // Zeige die häufigsten Arten
         const sortedBees = session.bumblebees

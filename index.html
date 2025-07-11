@@ -8,8 +8,6 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
     <div class="app-container">
@@ -20,82 +18,101 @@
             </button>
         </header>
         
-        <div class="map-container">
-            <div id="map"></div>
-        </div>
-        
-        <div class="timer-container">
-            <div id="timer">5:00</div>
-            <div class="timer-buttons">
-                <button id="start-button" class="primary-button">Zählung starten</button>
-                <button id="stop-save-button" class="secondary-button hidden">Beenden & Speichern</button>
-                <button id="reset-button" class="warning-button">Neustart</button>
+        <!-- Startseite -->
+        <div id="home-page" class="page">
+            <div class="main-action">
+                <button id="new-counting-button" class="new-counting-button">
+                    🐝 Neue Zählung starten
+                </button>
             </div>
             
-            <div id="distance-tracking" class="distance-tracking hidden">
-                <h3>Strecken-Tracking (50m)</h3>
-                <div class="progress-container">
-                    <div class="progress-bar">
-                        <div id="target-position" class="target-position"></div>
-                        <div id="current-position" class="current-position"></div>
-                    </div>
-                    <div class="progress-labels">
-                        <span>0m</span>
-                        <span>50m</span>
-                    </div>
-                </div>
-                <div id="distance-info" class="distance-info">
-                    <div>Aktuelle Distanz: <span id="current-distance">0</span> m</div>
-                    <div>Geschwindigkeit: <span id="speed-feedback">-</span></div>
+            <div class="manage-species-container">
+                <h2>Benutzerdefinierte Arten verwalten</h2>
+                <div class="manage-species-controls">
+                    <select id="custom-species-select" class="species-select">
+                        <option value="">Wähle eine Art zum Löschen...</option>
+                    </select>
+                    <button id="delete-species-button" class="warning-button" disabled>Art löschen</button>
                 </div>
             </div>
-        </div>
 
-        <div class="counter-container">
-            <h2>Hummeln</h2>
-            <div id="bumblebee-list">
-                <!-- Hier werden die Hummelzähler dynamisch eingefügt -->
+            <div class="sessions-container">
+                <h2>Gespeicherte Zählungen</h2>
+                <div class="sessions-buttons">
+                    <button id="show-sessions" class="secondary-button">Übersicht anzeigen</button>
+                </div>
+                <div id="sessions-list" class="sessions-list">
+                    <!-- Hier werden die Sessions dynamisch eingefügt -->
+                </div>
             </div>
-            <button id="add-bumblebee" class="secondary-button">Neue Hummelart hinzufügen</button>
-        </div>
 
-        <div class="sessions-container">
-            <h2>Gespeicherte Zählungen</h2>
-            <div class="sessions-buttons">
-                <button id="show-sessions" class="secondary-button">Übersicht anzeigen</button>
-            </div>
-            <div id="sessions-list" class="sessions-list">
-                <!-- Hier werden die Sessions dynamisch eingefügt -->
+            <div class="installation-guide">
+                <h2>Installation auf dem Homescreen</h2>
+                <div class="tabs">
+                    <button class="tab-button active" data-tab="android">Android</button>
+                    <button class="tab-button" data-tab="ios">iPhone</button>
+                </div>
+                <div class="tab-content active" id="android">
+                    <ol>
+                        <li>Öffne die Seite in Chrome</li>
+                        <li>Tippe auf die drei Punkte (⋮) in der oberen rechten Ecke</li>
+                        <li>Wähle "Zum Startbildschirm hinzufügen"</li>
+                        <li>Bestätige mit "Hinzufügen"</li>
+                    </ol>
+                </div>
+                <div class="tab-content" id="ios">
+                    <ol>
+                        <li>Öffne die Seite in Safari</li>
+                        <li>Tippe auf das Teilen-Symbol (□↑) unten in der Mitte</li>
+                        <li>Scrolle nach unten und wähle "Zum Home-Bildschirm"</li>
+                        <li>Tippe oben rechts auf "Hinzufügen"</li>
+                    </ol>
+                </div>
             </div>
         </div>
+        
+        <!-- Zählungsseite -->
+        <div id="counting-page" class="page hidden">
+            <div class="page-header">
+                <h2 id="counting-status">Bereit zum Zählen</h2>
+            </div>
+            
+            <div class="timer-container">
+                <div id="timer">5:00</div>
+                <div class="timer-buttons">
+                    <button id="start-counting-button" class="primary-button">Zählung starten</button>
+                    <button id="pause-button" class="secondary-button hidden">Pausieren</button>
+                    <button id="cancel-button" class="warning-button">Abbrechen</button>
+                    <button id="save-button" class="primary-button hidden">Speichern</button>
+                </div>
+                
+                <div id="distance-tracking" class="distance-tracking">
+                    <h3>Maßband-Position (50m)</h3>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div id="target-position" class="target-position"></div>
+                        </div>
+                        <div class="progress-labels">
+                            <span>0m</span>
+                            <span>50m</span>
+                        </div>
+                    </div>
+                    <div id="distance-info" class="distance-info">
+                        <div>Sollposition: <span id="target-distance">0</span> m</div>
+                    </div>
+                </div>
+            </div>
 
-        <div class="installation-guide">
-            <h2>Installation auf dem Homescreen</h2>
-            <div class="tabs">
-                <button class="tab-button active" data-tab="android">Android</button>
-                <button class="tab-button" data-tab="ios">iPhone</button>
-            </div>
-            <div class="tab-content active" id="android">
-                <ol>
-                    <li>Öffne die Seite in Chrome</li>
-                    <li>Tippe auf die drei Punkte (⋮) in der oberen rechten Ecke</li>
-                    <li>Wähle "Zum Startbildschirm hinzufügen"</li>
-                    <li>Bestätige mit "Hinzufügen"</li>
-                </ol>
-            </div>
-            <div class="tab-content" id="ios">
-                <ol>
-                    <li>Öffne die Seite in Safari</li>
-                    <li>Tippe auf das Teilen-Symbol (□↑) unten in der Mitte</li>
-                    <li>Scrolle nach unten und wähle "Zum Home-Bildschirm"</li>
-                    <li>Tippe oben rechts auf "Hinzufügen"</li>
-                </ol>
+            <div class="counter-container">
+                <h2>Arterfassung</h2>
+                <div id="bumblebee-list">
+                    <!-- Hier werden die Hummelzähler dynamisch eingefügt -->
+                </div>
+                <button id="add-bumblebee" class="secondary-button">Neue Art hinzufügen</button>
             </div>
         </div>
     </div>
 
-    <!-- Leaflet JavaScript -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
     <script>
         // Service Worker registrieren für Offline-Funktionalität
