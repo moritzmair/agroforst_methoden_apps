@@ -13,9 +13,6 @@
     <div class="app-container">
         <header>
             <h1>Hummelzähler</h1>
-            <button id="update-app-button" class="update-button" title="App aktualisieren">
-                🔄
-            </button>
         </header>
         
         <!-- Startseite -->
@@ -67,6 +64,24 @@
                         <li>Scrolle nach unten und wähle "Zum Home-Bildschirm"</li>
                         <li>Tippe oben rechts auf "Hinzufügen"</li>
                     </ol>
+                </div>
+            </div>
+
+            <div class="app-info-section">
+                <h2>App-Information</h2>
+                <div class="app-info-content">
+                    <div class="version-info">
+                        <span class="version-label">Version:</span>
+                        <span id="app-version" class="version-number">1.0.0</span>
+                    </div>
+                    <div class="update-status">
+                        <div id="update-status-text" class="status-text">Prüfe auf Updates...</div>
+                        <div id="last-check-time" class="last-check">Letzter Check: Nie</div>
+                    </div>
+                    <button id="update-app-button" class="update-button">
+                        <span class="update-icon">🔄</span>
+                        <span class="update-text">Nach Updates suchen</span>
+                    </button>
                 </div>
             </div>
         </div>

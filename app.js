@@ -55,6 +55,12 @@ const countingStatus = document.getElementById('counting-status');
 let currentPage = 'home'; // 'home' oder 'counting'
 let countingFinished = false; // Ob die 5 Minuten abgelaufen sind
 
+// Update-Status
+let isOnline = navigator.onLine;
+let lastUpdateCheck = null;
+let updateAvailable = false;
+const APP_VERSION = '1.0.0';
+
 // Event-Listener
 document.addEventListener('DOMContentLoaded', () => {
     // Daten aus dem lokalen Speicher laden
@@ -65,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderSessionsList();
     renderCustomSpeciesSelect();
     initTabSwitching();
+    initAppUpdate();
     
     // Event-Listener für Navigation
     newCountingButton.addEventListener('click', showCountingPage);
@@ -82,6 +89,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event-Listener für Arten-Verwaltung
     customSpeciesSelect.addEventListener('change', updateDeleteButton);
     deleteSpeciesButton.addEventListener('click', deleteCustomSpecies);
+    
+    // Online/Offline Status überwachen
+    window.addEventListener('online', handleOnlineStatus);
+    window.addEventListener('offline', handleOfflineStatus);
+    
+    // Automatische Update-Prüfung beim Start
+    setTimeout(checkForUpdatesOnStartup, 2000);
 });
 
 // Seitennavigation
@@ -738,28 +752,109 @@ function initAppUpdate() {
     const updateButton = document.getElementById('update-app-button');
     
     if (updateButton) {
-        updateButton.addEventListener('click', updateApp);
+        updateButton.addEventListener('click', manualUpdateCheck);
     }
+    
+    // Lade letzten Update-Check aus localStorage
+    loadLastUpdateCheck();
+    
+    // Zeige aktuelle Version an
+    updateVersionDisplay();
     
     // Prüfe auf Service Worker Updates
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-            // Neue Version ist verfügbar, zeige Hinweis
-            showUpdateNotification();
+            // Neue Version ist verfügbar
+            updateAvailable = true;
+            updateUpdateStatus();
         });
-        
-        // Prüfe regelmäßig auf Updates
-        setInterval(checkForUpdates, 60000); // Alle 60 Sekunden
     }
 }
 
-async function updateApp() {
+function updateVersionDisplay() {
+    const versionElement = document.getElementById('app-version');
+    if (versionElement) {
+        versionElement.textContent = APP_VERSION;
+    }
+}
+
+function handleOnlineStatus() {
+    isOnline = true;
+    updateUpdateStatus();
+}
+
+function handleOfflineStatus() {
+    isOnline = false;
+    updateUpdateStatus();
+}
+
+async function checkForUpdatesOnStartup() {
+    if (!isOnline) {
+        updateUpdateStatus();
+        return;
+    }
+    
+    await performUpdateCheck();
+}
+
+async function manualUpdateCheck() {
+    const updateButton = document.getElementById('update-app-button');
+    
+    if (!isOnline) {
+        updateUpdateStatus();
+        return;
+    }
+    
+    // Zeige Loading-Status
+    updateButton.disabled = true;
+    updateButton.innerHTML = '<span class="update-icon">⏳</span><span class="update-text">Prüfe...</span>';
+    
+    if (updateAvailable) {
+        // Update ist verfügbar, führe es aus
+        await performAppUpdate();
+    } else {
+        // Prüfe auf neue Updates
+        await performUpdateCheck();
+        
+        // Button zurücksetzen
+        setTimeout(() => {
+            updateButton.disabled = false;
+            updateButton.innerHTML = '<span class="update-icon">🔄</span><span class="update-text">Nach Updates suchen</span>';
+        }, 1000);
+    }
+}
+
+async function performUpdateCheck() {
+    try {
+        lastUpdateCheck = new Date();
+        saveLastUpdateCheck();
+        
+        if ('serviceWorker' in navigator) {
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (registration) {
+                await registration.update();
+                
+                // Prüfe, ob ein neuer Service Worker wartet
+                if (registration.waiting) {
+                    updateAvailable = true;
+                }
+            }
+        }
+        
+        updateUpdateStatus();
+        
+    } catch (error) {
+        console.log('Update-Check fehlgeschlagen:', error);
+        updateUpdateStatus();
+    }
+}
+
+async function performAppUpdate() {
     const updateButton = document.getElementById('update-app-button');
     
     try {
-        // Zeige Loading-Animation
-        updateButton.classList.add('updating');
-        updateButton.disabled = true;
+        // Zeige Update-Status
+        updateButton.innerHTML = '<span class="update-icon">⬇️</span><span class="update-text">Aktualisiere...</span>';
         
         // Lösche alle Caches
         if ('caches' in window) {
@@ -770,84 +865,86 @@ async function updateApp() {
             console.log('Alle Caches wurden gelöscht');
         }
         
-        // Unregistriere Service Worker und registriere neu
+        // Aktiviere wartenden Service Worker
         if ('serviceWorker' in navigator) {
-            const registrations = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(
-                registrations.map(registration => registration.unregister())
-            );
-            console.log('Service Worker wurde deregistriert');
-            
-            // Kurz warten und dann neu registrieren
-            setTimeout(() => {
-                navigator.serviceWorker.register('service-worker.js')
-                    .then(registration => {
-                        console.log('Service Worker neu registriert');
-                        // Seite neu laden
-                        window.location.reload(true);
-                    })
-                    .catch(error => {
-                        console.error('Fehler beim Neuregistrieren:', error);
-                        // Fallback: Einfach neu laden
-                        window.location.reload(true);
-                    });
-            }, 500);
-        } else {
-            // Fallback: Einfach neu laden
-            window.location.reload(true);
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (registration && registration.waiting) {
+                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
         }
+        
+        // Seite neu laden
+        setTimeout(() => {
+            window.location.reload(true);
+        }, 1000);
         
     } catch (error) {
         console.error('Fehler beim App-Update:', error);
         
-        // Entferne Loading-Animation
-        updateButton.classList.remove('updating');
+        // Button zurücksetzen
         updateButton.disabled = false;
+        updateButton.innerHTML = '<span class="update-icon">🔄</span><span class="update-text">Nach Updates suchen</span>';
         
         // Fallback: Einfach neu laden
-        if (confirm('Fehler beim Cache-Update. Soll die Seite neu geladen werden?')) {
+        if (confirm('Fehler beim Update. Soll die Seite neu geladen werden?')) {
             window.location.reload(true);
         }
     }
 }
 
-async function checkForUpdates() {
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        try {
-            const registration = await navigator.serviceWorker.getRegistration();
-            if (registration) {
-                await registration.update();
-            }
-        } catch (error) {
-            console.log('Update-Check fehlgeschlagen:', error);
-        }
-    }
-}
-
-function showUpdateNotification() {
+function updateUpdateStatus() {
+    const statusElement = document.getElementById('update-status-text');
+    const lastCheckElement = document.getElementById('last-check-time');
     const updateButton = document.getElementById('update-app-button');
-    if (updateButton) {
-        // Zeige visuellen Hinweis auf verfügbares Update
-        updateButton.style.background = '#FF9800';
-        updateButton.title = 'Update verfügbar! Klicken zum Aktualisieren';
-        
-        // Kurze Animation
-        updateButton.style.animation = 'pulse 2s infinite';
+    
+    if (!statusElement || !lastCheckElement || !updateButton) return;
+    
+    // Aktualisiere letzten Check
+    if (lastUpdateCheck) {
+        const timeString = lastUpdateCheck.toLocaleString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        lastCheckElement.textContent = `Letzter Check: ${timeString}`;
+    } else {
+        lastCheckElement.textContent = 'Letzter Check: Nie';
+    }
+    
+    // Aktualisiere Status
+    if (!isOnline) {
+        statusElement.textContent = 'Offline - Keine Update-Prüfung möglich';
+        statusElement.className = 'status-text offline';
+        updateButton.innerHTML = '<span class="update-icon">📡</span><span class="update-text">Offline</span>';
+        updateButton.disabled = true;
+    } else if (updateAvailable) {
+        statusElement.textContent = 'Update verfügbar!';
+        statusElement.className = 'status-text update-available';
+        updateButton.innerHTML = '<span class="update-icon">⬇️</span><span class="update-text">Jetzt aktualisieren</span>';
+        updateButton.disabled = false;
+    } else {
+        statusElement.textContent = 'App ist auf dem neuesten Stand';
+        statusElement.className = 'status-text up-to-date';
+        updateButton.innerHTML = '<span class="update-icon">🔄</span><span class="update-text">Nach Updates suchen</span>';
+        updateButton.disabled = false;
     }
 }
 
-// CSS für Pulse-Animation hinzufügen
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-        100% { transform: scale(1); }
+function saveLastUpdateCheck() {
+    if (lastUpdateCheck) {
+        localStorage.setItem('lastUpdateCheck', lastUpdateCheck.toISOString());
     }
-`;
-document.head.appendChild(style);
+}
 
-// Update-Funktionalität beim Laden initialisieren
-document.addEventListener('DOMContentLoaded', () => {
-    initAppUpdate();
-});
+function loadLastUpdateCheck() {
+    try {
+        const saved = localStorage.getItem('lastUpdateCheck');
+        if (saved) {
+            lastUpdateCheck = new Date(saved);
+        }
+    } catch (error) {
+        console.error('Fehler beim Laden des letzten Update-Checks:', error);
+    }
+}
