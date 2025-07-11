@@ -22,6 +22,25 @@
                     🐝 Neue Zählung starten
                 </button>
             </div>
+
+            <div class="environmental-data-container">
+                <h2>Umweltdaten</h2>
+                <div class="environmental-fields">
+                    <div class="field-group">
+                        <label for="wind-strength">Windstärke (Beaufort-Skala 0-12):</label>
+                        <input type="number" id="wind-strength" min="0" max="12" value="0" class="environmental-input">
+                    </div>
+                    <div class="field-group">
+                        <label for="temperature">Temperatur (°C):</label>
+                        <input type="number" id="temperature" step="0.5" class="environmental-input">
+                    </div>
+                    <div class="field-group">
+                        <label for="cloud-cover">Wolkenbedeckung (0-8 Achtel):</label>
+                        <input type="number" id="cloud-cover" min="0" max="8" value="0" class="environmental-input">
+                    </div>
+                </div>
+                <button id="save-environmental-data" class="secondary-button">Umweltdaten speichern</button>
+            </div>
             
             <div class="manage-species-container">
                 <h2>Benutzerdefinierte Arten verwalten</h2>
@@ -72,7 +91,7 @@
                 <div class="app-info-content">
                     <div class="version-info">
                         <span class="version-label">Version:</span>
-                        <span id="app-version" class="version-number">1.0.0</span>
+                        <span id="app-version" class="version-number">Lädt...</span>
                     </div>
                     <div class="update-status">
                         <div id="update-status-text" class="status-text">Prüfe auf Updates...</div>

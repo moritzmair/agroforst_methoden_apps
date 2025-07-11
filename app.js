@@ -41,6 +41,12 @@ const sessionsListElement = document.getElementById('sessions-list');
 const customSpeciesSelect = document.getElementById('custom-species-select');
 const deleteSpeciesButton = document.getElementById('delete-species-button');
 
+// Umweltdaten DOM-Elemente
+const windStrengthInput = document.getElementById('wind-strength');
+const temperatureInput = document.getElementById('temperature');
+const cloudCoverInput = document.getElementById('cloud-cover');
+const saveEnvironmentalDataButton = document.getElementById('save-environmental-data');
+
 // Neue DOM-Elemente für die Seitennavigation
 const homePage = document.getElementById('home-page');
 const countingPage = document.getElementById('counting-page');
@@ -59,19 +65,42 @@ let countingFinished = false; // Ob die 5 Minuten abgelaufen sind
 let isOnline = navigator.onLine;
 let lastUpdateCheck = null;
 let updateAvailable = false;
-const APP_VERSION = '1.0.2';
+let APP_VERSION = null; // Wird dynamisch aus manifest.json geladen
+
+// Zentrale Funktion zum Laden der App-Version aus manifest.json
+async function loadAppVersion() {
+    try {
+        const response = await fetch('./manifest.json');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const manifest = await response.json();
+        APP_VERSION = manifest.version;
+        console.log('App-Version geladen:', APP_VERSION);
+        return APP_VERSION;
+    } catch (error) {
+        console.error('Fehler beim Laden der App-Version:', error);
+        // Fallback-Version falls manifest.json nicht geladen werden kann
+        APP_VERSION = '1.0.0';
+        return APP_VERSION;
+    }
+}
 
 // Event-Listener
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // App-Version aus manifest.json laden
+    await loadAppVersion();
+    
     // Daten aus dem lokalen Speicher laden
     loadFromLocalStorage();
+    loadEnvironmentalDataFromLocalStorage();
     
     // UI initialisieren
     showHomePage();
     renderSessionsList();
     renderCustomSpeciesSelect();
     initTabSwitching();
-    initAppUpdate();
+    await initAppUpdate();
     
     // Event-Listener für Navigation
     newCountingButton.addEventListener('click', showCountingPage);
@@ -89,6 +118,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event-Listener für Arten-Verwaltung
     customSpeciesSelect.addEventListener('change', updateDeleteButton);
     deleteSpeciesButton.addEventListener('click', deleteCustomSpecies);
+    
+    // Event-Listener für Umweltdaten (automatisches Speichern bei Änderung)
+    windStrengthInput.addEventListener('change', saveEnvironmentalDataToLocalStorage);
+    temperatureInput.addEventListener('change', saveEnvironmentalDataToLocalStorage);
+    cloudCoverInput.addEventListener('change', saveEnvironmentalDataToLocalStorage);
+    
+    // Event-Listener für manuelles Speichern der Umweltdaten
+    saveEnvironmentalDataButton.addEventListener('click', saveEnvironmentalDataWithFeedback);
     
     // Online/Offline Status überwachen
     window.addEventListener('online', handleOnlineStatus);
@@ -157,6 +194,9 @@ function resetCountingState() {
         bee.count = 0;
     });
     
+    // Umweltdaten NICHT zurücksetzen, da sie auf der Startseite eingegeben werden
+    // und für alle Zählungen gelten
+    
     // UI-Elemente zurücksetzen
     pauseButton.textContent = 'Pausieren';
     pauseButton.classList.add('hidden');
@@ -175,6 +215,7 @@ function renderBumblebeeList() {
     bumblebees.forEach(bee => {
         const beeItem = document.createElement('div');
         beeItem.className = 'bumblebee-item';
+        
         beeItem.innerHTML = `
             <div class="bumblebee-name">${bee.name}</div>
             <div class="counter-controls">
@@ -437,6 +478,43 @@ function saveToLocalStorage() {
     }
 }
 
+function saveEnvironmentalDataToLocalStorage() {
+    try {
+        const environmentalData = {
+            windStrength: parseInt(windStrengthInput.value) || 0,
+            temperature: parseFloat(temperatureInput.value) || null,
+            cloudCover: parseInt(cloudCoverInput.value) || 0
+        };
+        localStorage.setItem('environmentalData', JSON.stringify(environmentalData));
+    } catch (error) {
+        console.error('Fehler beim Speichern der Umweltdaten:', error);
+    }
+}
+
+function saveEnvironmentalDataWithFeedback() {
+    try {
+        saveEnvironmentalDataToLocalStorage();
+        alert('Umweltdaten wurden erfolgreich gespeichert.');
+    } catch (error) {
+        console.error('Fehler beim Speichern der Umweltdaten:', error);
+        alert('Fehler beim Speichern der Umweltdaten.');
+    }
+}
+
+function loadEnvironmentalDataFromLocalStorage() {
+    try {
+        const savedData = localStorage.getItem('environmentalData');
+        if (savedData) {
+            const environmentalData = JSON.parse(savedData);
+            windStrengthInput.value = environmentalData.windStrength || 0;
+            temperatureInput.value = environmentalData.temperature || '';
+            cloudCoverInput.value = environmentalData.cloudCover || 0;
+        }
+    } catch (error) {
+        console.error('Fehler beim Laden der Umweltdaten:', error);
+    }
+}
+
 function loadFromLocalStorage() {
     try {
         const savedBumblebees = localStorage.getItem('bumblebees');
@@ -512,6 +590,13 @@ function saveCountingSession() {
     // Berechne die Gesamtanzahl der gezählten Tiere
     const totalCount = bumblebees.reduce((sum, bee) => sum + bee.count, 0);
     
+    // Erfasse Umweltdaten
+    const environmentalData = {
+        windStrength: parseInt(windStrengthInput.value) || 0,
+        temperature: parseFloat(temperatureInput.value) || null,
+        cloudCover: parseInt(cloudCoverInput.value) || 0
+    };
+
     // Erstelle das Session-Objekt
     const sessionData = {
         id: sessionKey,
@@ -519,7 +604,8 @@ function saveCountingSession() {
         displayDate: displayDate,
         bumblebees: JSON.parse(JSON.stringify(bumblebees)), // Deep copy
         totalCount: totalCount,
-        finalDistance: totalDistance // Immer die volle Zieldistanz, da zeitbasiert
+        finalDistance: totalDistance, // Immer die volle Zieldistanz, da zeitbasiert
+        environmental: environmentalData
     };
     
     try {
@@ -635,26 +721,49 @@ function exportSessionData(sessionId) {
         }
         
         const session = JSON.parse(sessionData);
+        const sessionDate = new Date(session.startTime);
+        const dateStr = sessionDate.toLocaleDateString('de-DE');
+        const timeStr = sessionDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
         
-        // Erstelle CSV-ähnliche Daten
-        let csvData = `Zählung vom ${session.displayDate}\n\n`;
-        csvData += 'Art,Anzahl\n';
+        let csvContent = '';
         
-        session.bumblebees.forEach(bee => {
-            if (bee.count > 0) {
-                csvData += `${bee.name},${bee.count}\n`;
-            }
-        });
+        // Kopfzeile mit Umweltdaten
+        const environmental = session.environmental || {};
+        const windStrength = environmental.windStrength || 'n/a';
+        const temperature = environmental.temperature !== null ? environmental.temperature : 'n/a';
+        const cloudCover = environmental.cloudCover || 'n/a';
         
-        csvData += `\nGesamtanzahl,${session.totalCount}\n`;
-        csvData += `Zurückgelegte Distanz,${session.finalDistance.toFixed(1)}m\n`;
+        csvContent += `# Zählung vom ${dateStr} ${timeStr}\n`;
+        csvContent += `# Windstärke: ${windStrength}, Temperatur: ${temperature}°C, Wolkenbedeckung: ${cloudCover}/8\n`;
+        csvContent += '#\n';
         
-        // Erstelle einen Download-Link
-        const blob = new Blob([csvData], { type: 'text/plain;charset=utf-8' });
+        // Sammle alle Arten mit Zählung > 0
+        const speciesWithCounts = session.bumblebees.filter(bee => bee.count > 0);
+        
+        if (speciesWithCounts.length > 0) {
+            // Header-Zeile: Art, Zaehlung_1
+            csvContent += 'Art,Zaehlung_1\n';
+            
+            // Datenzeilen: Für jede Art eine Zeile
+            speciesWithCounts.forEach(bee => {
+                csvContent += `"${bee.name}",${bee.count}\n`;
+            });
+        } else {
+            // Falls keine Tiere gezählt wurden
+            csvContent += 'Art,Zaehlung_1\n';
+            csvContent += '"Keine Zählung",0\n';
+        }
+        
+        // CSV-Download erstellen
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `hummelzaehlung_${session.startTime.split('T')[0]}.txt`;
+        
+        // Dateiname mit Session-Datum
+        const filename = `hummelzaehlung_${dateStr.replace(/\./g, '-')}_${timeStr.replace(/:/g, '-')}.csv`;
+        a.download = filename;
+        
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -774,25 +883,67 @@ function exportAllSessionsAsCSV() {
     }
     
     try {
-        // CSV-Header
-        let csvContent = 'Datum,Uhrzeit,Art,Anzahl,Gesamtanzahl_Session,Distanz_m\n';
+        let csvContent = '';
         
+        // Aktuelle Umweltdaten aus dem localStorage laden
+        const currentEnvironmentalData = JSON.parse(localStorage.getItem('environmentalData') || '{}');
+        
+        // Kopfzeilen mit Umweltdaten
+        csvContent += '# Umweltdaten (gelten für alle Zählungen):\n';
+        const windStrength = currentEnvironmentalData.windStrength !== undefined ? currentEnvironmentalData.windStrength : 'nicht angegeben';
+        const temperature = currentEnvironmentalData.temperature !== null && currentEnvironmentalData.temperature !== undefined ? currentEnvironmentalData.temperature : 'nicht angegeben';
+        const cloudCover = currentEnvironmentalData.cloudCover !== undefined ? currentEnvironmentalData.cloudCover : 'nicht angegeben';
+        
+        csvContent += `# Windstärke: ${windStrength} Beaufort | Temperatur: ${temperature}°C | Wolkenbedeckung: ${cloudCover}/8 Achtel\n`;
+        csvContent += '#\n';
+        
+        // Sammle alle vorkommenden Arten
+        const allSpecies = new Set();
         sessions.forEach(session => {
+            session.bumblebees.forEach(bee => {
+                if (bee.count > 0) {
+                    allSpecies.add(bee.name);
+                }
+            });
+        });
+        
+        // Falls keine Arten gefunden wurden, füge "Keine Zählung" hinzu
+        if (allSpecies.size === 0) {
+            allSpecies.add('Keine Zählung');
+        }
+        
+        const speciesArray = Array.from(allSpecies).sort();
+        
+        
+        
+        // Header-Zeile mit Zählungsnummern
+        csvContent += 'Art';
+        sessions.forEach((session, index) => {
+            csvContent += `,Zaehlung_${index + 1}`;
+        });
+        csvContent += '\n';
+
+        // Zeitpunkt-Zeile über den Arten
+        csvContent += 'Zeitpunkt';
+        sessions.forEach((session, index) => {
             const sessionDate = new Date(session.startTime);
             const dateStr = sessionDate.toLocaleDateString('de-DE');
             const timeStr = sessionDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+            csvContent += `,"${dateStr} ${timeStr}"`;
+        });
+        csvContent += '\n';
+        
+        // Datenzeilen: Für jede Art eine Zeile mit den Zählungen
+        speciesArray.forEach(speciesName => {
+            csvContent += `"${speciesName}"`;
             
-            // Für jede Art eine Zeile
-            session.bumblebees.forEach(bee => {
-                if (bee.count > 0) {
-                    csvContent += `"${dateStr}","${timeStr}","${bee.name}",${bee.count},${session.totalCount},${session.finalDistance.toFixed(1)}\n`;
-                }
+            sessions.forEach(session => {
+                const bee = session.bumblebees.find(b => b.name === speciesName);
+                const count = bee ? bee.count : 0;
+                csvContent += `,${count}`;
             });
             
-            // Falls keine Tiere gezählt wurden, trotzdem eine Zeile für die Session
-            if (session.totalCount === 0) {
-                csvContent += `"${dateStr}","${timeStr}","Keine Zählung",0,0,${session.finalDistance.toFixed(1)}\n`;
-            }
+            csvContent += '\n';
         });
         
         // CSV-Download erstellen
@@ -825,7 +976,7 @@ function showSessionsOverview() {
 }
 
 // App-Update-Funktionalität
-function initAppUpdate() {
+async function initAppUpdate() {
     const updateButton = document.getElementById('update-app-button');
     
     if (updateButton) {
@@ -836,7 +987,7 @@ function initAppUpdate() {
     loadLastUpdateCheck();
     
     // Zeige aktuelle Version an
-    updateVersionDisplay();
+    await updateVersionDisplay();
     
     // Prüfe auf Service Worker Updates
     if ('serviceWorker' in navigator) {
@@ -862,9 +1013,13 @@ async function requestNotificationPermission() {
     }
 }
 
-function updateVersionDisplay() {
+async function updateVersionDisplay() {
     const versionElement = document.getElementById('app-version');
     if (versionElement) {
+        // Stelle sicher, dass die Version geladen ist
+        if (!APP_VERSION) {
+            await loadAppVersion();
+        }
         versionElement.textContent = APP_VERSION;
     }
 }
@@ -958,6 +1113,11 @@ async function performUpdateCheck() {
 
 async function checkManifestVersion() {
     try {
+        // Stelle sicher, dass die lokale Version geladen ist
+        if (!APP_VERSION) {
+            await loadAppVersion();
+        }
+        
         // Lade die aktuelle Manifest-Datei vom Server
         const response = await fetch('./manifest.json?t=' + Date.now(), {
             cache: 'no-cache'
@@ -993,43 +1153,79 @@ async function performAppUpdate() {
     try {
         // Zeige Update-Status
         updateButton.innerHTML = '<span class="update-icon">⬇️</span><span class="update-text">Aktualisiere...</span>';
+        updateButton.disabled = true;
         
-        // Lösche alle Caches
+        console.log('Starte App-Update...');
+        
+        // 1. Lösche alle Caches
         if ('caches' in window) {
             const cacheNames = await caches.keys();
+            console.log('Lösche Caches:', cacheNames);
             await Promise.all(
                 cacheNames.map(cacheName => caches.delete(cacheName))
             );
             console.log('Alle Caches wurden gelöscht');
         }
         
-        // Aktiviere wartenden Service Worker
+        // 2. Service Worker Update handhaben
         if ('serviceWorker' in navigator) {
             const registration = await navigator.serviceWorker.getRegistration();
-            if (registration && registration.waiting) {
-                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+            if (registration) {
+                // Aktiviere wartenden Service Worker falls vorhanden
+                if (registration.waiting) {
+                    console.log('Aktiviere wartenden Service Worker...');
+                    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    
+                    // Warte auf Controller-Wechsel
+                    await new Promise((resolve) => {
+                        const handleControllerChange = () => {
+                            navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+                            resolve();
+                        };
+                        navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+                        
+                        // Fallback nach 2 Sekunden
+                        setTimeout(resolve, 2000);
+                    });
+                }
+                
+                // Forciere Service Worker Update
+                console.log('Forciere Service Worker Update...');
+                await registration.update();
             }
         }
         
-        // Update-Status zurücksetzen
+        // 3. Update-Status zurücksetzen
         updateAvailable = false;
+        lastUpdateCheck = new Date();
+        saveLastUpdateCheck();
         
-        // Seite mit Cache-Bypass neu laden
-        setTimeout(() => {
-            window.location.reload(true);
-        }, 1000);
+        console.log('Update abgeschlossen, lade Seite neu...');
+        
+        // 4. Seite mit Cache-Bypass neu laden (moderne Methode)
+        // Verwende location.href mit Cache-Busting Parameter
+        const url = new URL(window.location.href);
+        url.searchParams.set('_t', Date.now());
+        window.location.href = url.toString();
         
     } catch (error) {
         console.error('Fehler beim App-Update:', error);
         
         // Button zurücksetzen
         updateButton.disabled = false;
-        updateButton.innerHTML = '<span class="update-icon">🔄</span><span class="update-text">Nach Updates suchen</span>';
+        updateButton.innerHTML = '<span class="update-icon">❌</span><span class="update-text">Update fehlgeschlagen</span>';
         
-        // Fallback: Einfach neu laden
-        if (confirm('Fehler beim Update. Soll die Seite neu geladen werden?')) {
-            window.location.reload(true);
-        }
+        // Fallback: Einfach neu laden mit Cache-Busting
+        setTimeout(() => {
+            if (confirm('Fehler beim Update. Soll die Seite neu geladen werden?')) {
+                const url = new URL(window.location.href);
+                url.searchParams.set('_t', Date.now());
+                window.location.href = url.toString();
+            } else {
+                // Button zurücksetzen
+                updateButton.innerHTML = '<span class="update-icon">🔄</span><span class="update-text">Nach Updates suchen</span>';
+            }
+        }, 2000);
     }
 }
 
