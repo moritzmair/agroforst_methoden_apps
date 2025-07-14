@@ -93,13 +93,8 @@
                         <span class="version-label">Version:</span>
                         <span id="app-version" class="version-number">Lädt...</span>
                     </div>
-                    <div class="update-status">
-                        <div id="update-status-text" class="status-text">Prüfe auf Updates...</div>
-                        <div id="last-check-time" class="last-check">Letzter Check: Nie</div>
-                    </div>
-                    <button id="update-app-button" class="update-button">
-                        <span class="update-icon">🔄</span>
-                        <span class="update-text">Nach Updates suchen</span>
+                    <button id="clear-cache-button" class="secondary-button">
+                        🗑️ Cache leeren
                     </button>
                 </div>
             </div>
@@ -147,7 +142,7 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
     <script>
         // Service Worker registrieren für Offline-Funktionalität
         if ('serviceWorker' in navigator) {

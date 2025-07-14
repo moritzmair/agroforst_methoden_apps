@@ -112,8 +112,11 @@ self.addEventListener('fetch', event => {
   // Prüfe auf Cache-Busting Parameter (für Updates)
   const isCacheBusting = url.searchParams.has('_t') || url.searchParams.has('t') || url.searchParams.has('_cache_bust');
   
-  // Network First für HTML-Dateien und Cache-Busting Requests
-  if (event.request.headers.get('accept')?.includes('text/html') || isCacheBusting) {
+  // Prüfe ob es sich um manifest.json mit Cache-Busting handelt
+  const isManifestWithCacheBusting = url.pathname.endsWith('manifest.json') && isCacheBusting;
+  
+  // Network First für HTML-Dateien, Cache-Busting Requests und manifest.json mit Cache-Busting
+  if (event.request.headers.get('accept')?.includes('text/html') || isCacheBusting || isManifestWithCacheBusting) {
     event.respondWith(
       fetch(event.request, {
         cache: isCacheBusting ? 'no-cache' : 'default',
@@ -153,10 +156,10 @@ self.addEventListener('fetch', event => {
         })
     );
   } else {
-    // Stale While Revalidate für kritische App-Dateien (JS, CSS)
+    // Stale While Revalidate für kritische App-Dateien (JS, CSS, JSON außer manifest.json mit Cache-Busting)
     const isCriticalFile = url.pathname.endsWith('.js') ||
                           url.pathname.endsWith('.css') ||
-                          url.pathname.endsWith('.json');
+                          (url.pathname.endsWith('.json') && !isManifestWithCacheBusting);
     
     if (isCriticalFile) {
       event.respondWith(
