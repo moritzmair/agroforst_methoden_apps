@@ -94,57 +94,6 @@ export class SessionManager {
         }
     }
 
-    // Einzelne Session als CSV exportieren
-    exportSessionAsCSV(sessionId) {
-        try {
-            const session = this.getSessionDetails(sessionId);
-            if (!session) {
-                throw new Error('Session nicht gefunden.');
-            }
-            
-            const sessionDate = new Date(session.startTime);
-            const dateStr = sessionDate.toLocaleDateString('de-DE');
-            const timeStr = sessionDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-            
-            let csvContent = '';
-            
-            // Kopfzeile mit Umweltdaten
-            const environmental = session.environmental || {};
-            const windStrength = environmental.windStrength || 'n/a';
-            const temperature = environmental.temperature !== null ? environmental.temperature : 'n/a';
-            const cloudCover = environmental.cloudCover || 'n/a';
-            
-            csvContent += `# Zählung vom ${dateStr} ${timeStr}\n`;
-            csvContent += `# Windstärke: ${windStrength}, Temperatur: ${temperature}°C, Wolkenbedeckung: ${cloudCover}/8\n`;
-            csvContent += '#\n';
-            
-            // Sammle alle Arten mit Zählung > 0
-            const speciesWithCounts = session.bumblebees.filter(bee => bee.count > 0);
-            
-            if (speciesWithCounts.length > 0) {
-                // Header-Zeile: Art, Zaehlung_1
-                csvContent += 'Art,Zaehlung_1\n';
-                
-                // Datenzeilen: Für jede Art eine Zeile
-                speciesWithCounts.forEach(bee => {
-                    csvContent += `"${bee.name}",${bee.count}\n`;
-                });
-            } else {
-                // Falls keine Tiere gezählt wurden
-                csvContent += 'Art,Zaehlung_1\n';
-                csvContent += '"Keine Zählung",0\n';
-            }
-            
-            // Dateiname mit Session-Datum
-            const filename = `hummelzaehlung_${dateStr.replace(/\./g, '-')}_${timeStr.replace(/:/g, '-')}.csv`;
-            
-            this.downloadCSV(csvContent, filename);
-            
-        } catch (error) {
-            console.error('Fehler beim Exportieren der Session:', error);
-            throw error;
-        }
-    }
 
     // Alle Sessions als CSV exportieren
     exportAllSessionsAsCSV() {
@@ -181,7 +130,7 @@ export class SessionManager {
             });
             csvContent += '\n';
 
-            // Zeitpunkt-Zeile über den Arten
+            // Zeitpunkt-Zeile
             csvContent += 'Zeitpunkt';
             sessions.forEach((session, index) => {
                 const sessionDate = new Date(session.startTime);
@@ -189,6 +138,34 @@ export class SessionManager {
                 const timeStr = sessionDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                 csvContent += `,"${dateStr} ${timeStr}"`;
             });
+            csvContent += '\n';
+            
+            // Umweltdaten-Zeilen
+            csvContent += 'Windstärke';
+            sessions.forEach(session => {
+                const environmental = session.environmental || {};
+                const windStrength = environmental.windStrength || '';
+                csvContent += `,${windStrength}`;
+            });
+            csvContent += '\n';
+            
+            csvContent += 'Temperatur (°C)';
+            sessions.forEach(session => {
+                const environmental = session.environmental || {};
+                const temperature = environmental.temperature !== null ? environmental.temperature : '';
+                csvContent += `,${temperature}`;
+            });
+            csvContent += '\n';
+            
+            csvContent += 'Wolkenbedeckung (0-8)';
+            sessions.forEach(session => {
+                const environmental = session.environmental || {};
+                const cloudCover = environmental.cloudCover || '';
+                csvContent += `,${cloudCover}`;
+            });
+            csvContent += '\n';
+            
+            // Leerzeile zur Trennung
             csvContent += '\n';
             
             // Datenzeilen: Für jede Art eine Zeile mit den Zählungen
@@ -305,9 +282,6 @@ export function renderSessionsList(container, sessionManager) {
             <div class="session-actions">
                 <button class="session-button detail-button" data-session-id="${session.id}">
                     Details
-                </button>
-                <button class="session-button export-button" data-session-id="${session.id}">
-                    Export
                 </button>
                 <button class="session-button delete-button" data-session-id="${session.id}" data-display-date="${session.displayDate}">
                     Löschen

@@ -445,13 +445,6 @@ class HummelzaehlerApp {
             const details = this.sessionManager.formatSessionDetails(sessionId);
             this.uiNavigation.showMessage(details);
             
-        } else if (target.classList.contains('export-button')) {
-            try {
-                this.sessionManager.exportSessionAsCSV(sessionId);
-            } catch (error) {
-                this.uiNavigation.showMessage('Fehler beim Exportieren: ' + error.message);
-            }
-            
         } else if (target.classList.contains('delete-button')) {
             const displayDate = target.dataset.displayDate;
             if (this.uiNavigation.showConfirmDialog(`Möchtest du die Zählung vom ${displayDate} wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
