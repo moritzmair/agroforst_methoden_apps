@@ -132,8 +132,58 @@ h1, h2 {
         gap: 1rem;
     }
     
-    .field-group:last-child {
+    /* Bereich-Auswahl über die ganze Breite */
+    .field-group:has(#area-type) {
         grid-column: 1 / -1;
+    }
+}
+
+@media (min-width: 768px) {
+    .environmental-fields {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+    
+    /* Bereich-Auswahl über die ganze Breite auch bei 3 Spalten */
+    .field-group:has(#area-type) {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Umweltdaten-Buttons */
+.environmental-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    justify-content: space-between;
+/* Kleiner Button für Umweltdaten-Bearbeitung */
+.small-button {
+    font-size: 0.8rem;
+    padding: 0.5rem 1rem;
+    margin-top: 0.5rem;
+}
+
+.page-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.page-header h2 {
+    margin-bottom: 0.5rem;
+}
+
+}
+
+.environmental-buttons .secondary-button,
+.environmental-buttons .primary-button {
+    flex: 1;
+    min-width: 120px;
+}
+
+@media (max-width: 480px) {
+    .environmental-buttons {
+        flex-direction: column;
     }
 }
 

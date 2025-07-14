@@ -28,6 +28,7 @@ export const APP_CONFIG = {
 // App-Status Enums
 export const APP_PAGES = {
     HOME: 'home',
+    ENVIRONMENTAL: 'environmental',
     COUNTING: 'counting'
 };
 

@@ -22,10 +22,24 @@ export class UINavigation {
     // Zur Startseite wechseln
     showHomePage() {
         this.currentPage = APP_PAGES.HOME;
+        this.hideAllPages();
         
-        if (this.elements.homePage && this.elements.countingPage) {
+        if (this.elements.homePage) {
             this.elements.homePage.classList.remove('hidden');
-            this.elements.countingPage.classList.add('hidden');
+        }
+        
+        if (this.onPageChange) {
+            this.onPageChange(this.currentPage);
+        }
+    }
+
+    // Zur Umweltdaten-Seite wechseln
+    showEnvironmentalPage() {
+        this.currentPage = APP_PAGES.ENVIRONMENTAL;
+        this.hideAllPages();
+        
+        if (this.elements.environmentalPage) {
+            this.elements.environmentalPage.classList.remove('hidden');
         }
         
         if (this.onPageChange) {
@@ -36,15 +50,25 @@ export class UINavigation {
     // Zur Zählungsseite wechseln
     showCountingPage() {
         this.currentPage = APP_PAGES.COUNTING;
+        this.hideAllPages();
         
-        if (this.elements.homePage && this.elements.countingPage) {
-            this.elements.homePage.classList.add('hidden');
+        if (this.elements.countingPage) {
             this.elements.countingPage.classList.remove('hidden');
         }
         
         if (this.onPageChange) {
             this.onPageChange(this.currentPage);
         }
+    }
+
+    // Alle Seiten verstecken
+    hideAllPages() {
+        const pages = [this.elements.homePage, this.elements.environmentalPage, this.elements.countingPage];
+        pages.forEach(page => {
+            if (page) {
+                page.classList.add('hidden');
+            }
+        });
     }
 
     // Aktuelle Seite abrufen

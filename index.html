@@ -31,24 +31,6 @@
                 </button>
             </div>
 
-            <div class="environmental-data-container">
-                <h2>Umweltdaten</h2>
-                <div class="environmental-fields">
-                    <div class="field-group">
-                        <label for="wind-strength">Windstärke (Beaufort-Skala 0-12):</label>
-                        <input type="number" id="wind-strength" min="0" max="12" value="0" class="environmental-input">
-                    </div>
-                    <div class="field-group">
-                        <label for="temperature">Temperatur (°C):</label>
-                        <input type="number" id="temperature" step="0.5" class="environmental-input">
-                    </div>
-                    <div class="field-group">
-                        <label for="cloud-cover">Wolkenbedeckung (0-8 Achtel):</label>
-                        <input type="number" id="cloud-cover" min="0" max="8" value="0" class="environmental-input">
-                    </div>
-                </div>
-                <button id="save-environmental-data" class="secondary-button">Umweltdaten speichern</button>
-            </div>
             
             <div class="manage-species-container">
                 <h2>Benutzerdefinierte Arten verwalten</h2>
@@ -108,10 +90,63 @@
             </div>
         </div>
         
+        <!-- Umweltdaten-Seite -->
+        <div id="environmental-page" class="page hidden">
+            <div class="page-header">
+                <h2>Umweltdaten erfassen</h2>
+                <p>Bitte erfasse die aktuellen Umweltbedingungen für diese Zählung:</p>
+            </div>
+            
+            <div class="environmental-data-container">
+                <div class="environmental-fields">
+                    <div class="field-group">
+                        <label for="wind-strength">Windstärke (Beaufort-Skala 0-12):</label>
+                        <input type="number" id="wind-strength" min="0" max="12" value="0" class="environmental-input">
+                    </div>
+                    <div class="field-group">
+                        <label for="temperature">Temperatur (°C):</label>
+                        <input type="number" id="temperature" step="0.5" class="environmental-input">
+                    </div>
+                    <div class="field-group">
+                        <label for="cloud-cover">Wolkenbedeckung (0-8 Achtel):</label>
+                        <input type="number" id="cloud-cover" min="0" max="8" value="0" class="environmental-input">
+                    </div>
+                    <div class="field-group">
+                        <label for="most-visited-flower">Häufigste angeflogene Blüte:</label>
+                        <input type="text" id="most-visited-flower" class="environmental-input" placeholder="z.B. Löwenzahn">
+                    </div>
+                    <div class="field-group">
+                        <label for="second-visited-flower">2. häufigste Blüte:</label>
+                        <input type="text" id="second-visited-flower" class="environmental-input" placeholder="z.B. Klee">
+                    </div>
+                    <div class="field-group">
+                        <label for="third-visited-flower">3. häufigste Blüte:</label>
+                        <input type="text" id="third-visited-flower" class="environmental-input" placeholder="z.B. Raps">
+                    </div>
+                    <div class="field-group">
+                        <label for="area-type">Bereich:</label>
+                        <select id="area-type" class="environmental-input">
+                            <option value="">Bitte wählen...</option>
+                            <option value="Feldmitte">Feldmitte</option>
+                            <option value="Baumstreifen">Baumstreifen</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="environmental-buttons">
+                    <button id="cancel-environmental-button" class="secondary-button">Abbrechen</button>
+                    <button id="continue-counting-button" class="primary-button">Zählung starten</button>
+                </div>
+            </div>
+        </div>
+        
         <!-- Zählungsseite -->
         <div id="counting-page" class="page hidden">
             <div class="page-header">
                 <h2 id="counting-status">Bereit zum Zählen</h2>
+                <button id="edit-environmental-button" class="secondary-button small-button">
+                    🌡️ Umweltdaten bearbeiten
+                </button>
             </div>
             
             <div class="timer-container">

@@ -3,10 +3,8 @@
 
 // Module importieren
 import { defaultBumblebees, APP_CONFIG, APP_PAGES, TIMER_STATES } from './js/constants.js';
-import { 
-    loadBumblebeesFromStorage, 
-    loadEnvironmentalDataFromStorage,
-    saveEnvironmentalDataToStorage 
+import {
+    loadBumblebeesFromStorage
 } from './js/storage.js';
 import { Timer, updateTimerDisplay } from './js/timer.js';
 import { SpeciesManager, renderSpeciesList, renderCustomSpeciesSelect, updateDeleteButton } from './js/species-manager.js';
@@ -33,11 +31,18 @@ class HummelzaehlerApp {
         this.environmentalData = {
             windStrength: 0,
             temperature: null,
-            cloudCover: 0
+            cloudCover: 0,
+            mostVisitedFlower: '',
+            secondVisitedFlower: '',
+            thirdVisitedFlower: '',
+            areaType: ''
         };
         
         // Session-Bearbeitung
         this.editingSession = null;
+        
+        // Zustand für Umweltdaten-Bearbeitung während Zählung
+        this.editingEnvironmentalFromCounting = false;
     }
 
     // App initialisieren
@@ -73,6 +78,7 @@ class HummelzaehlerApp {
         this.elements = {
             // Seiten
             homePage: getElementById('home-page'),
+            environmentalPage: getElementById('environmental-page'),
             countingPage: getElementById('counting-page'),
             
             // Navigation
@@ -85,6 +91,7 @@ class HummelzaehlerApp {
             cancelButton: getElementById('cancel-button'),
             saveButton: getElementById('save-button'),
             countingStatus: getElementById('counting-status'),
+            editEnvironmentalButton: getElementById('edit-environmental-button'),
             
             // Arten-Verwaltung
             bumblebeeList: getElementById('bumblebee-list'),
@@ -96,7 +103,12 @@ class HummelzaehlerApp {
             windStrengthInput: getElementById('wind-strength'),
             temperatureInput: getElementById('temperature'),
             cloudCoverInput: getElementById('cloud-cover'),
-            saveEnvironmentalDataButton: getElementById('save-environmental-data'),
+            mostVisitedFlowerInput: getElementById('most-visited-flower'),
+            secondVisitedFlowerInput: getElementById('second-visited-flower'),
+            thirdVisitedFlowerInput: getElementById('third-visited-flower'),
+            areaTypeSelect: getElementById('area-type'),
+            cancelEnvironmentalButton: getElementById('cancel-environmental-button'),
+            continueCountingButton: getElementById('continue-counting-button'),
             
             // Sessions
             showSessionsButton: getElementById('show-sessions'),
@@ -148,6 +160,8 @@ class HummelzaehlerApp {
         // Arten-Manager-Events
         this.speciesManager.setOnUpdate(() => {
             this.updateSpeciesUI();
+            // Aktuelle Session mit neuen Artendaten aktualisieren
+            this.updateCurrentSessionWithSpeciesData();
         });
         
         // Session-Manager-Events
@@ -170,7 +184,7 @@ class HummelzaehlerApp {
     setupEventListeners() {
         // Navigation
         addEventListener(this.elements.newCountingButton, 'click', () => {
-            this.uiNavigation.showCountingPage();
+            this.uiNavigation.showEnvironmentalPage();
         });
         
         // Timer-Steuerung
@@ -190,6 +204,10 @@ class HummelzaehlerApp {
             this.saveCounting();
         });
         
+        addEventListener(this.elements.editEnvironmentalButton, 'click', () => {
+            this.editEnvironmentalDataDuringCounting();
+        });
+        
         // Arten-Verwaltung
         addEventListener(this.elements.addBumblebeeButton, 'click', () => {
             this.addNewSpecies();
@@ -203,21 +221,13 @@ class HummelzaehlerApp {
             this.deleteCustomSpecies();
         });
         
-        // Umweltdaten
-        addEventListener(this.elements.windStrengthInput, 'change', () => {
-            this.saveEnvironmentalData();
+        // Umweltdaten-Seite Navigation
+        addEventListener(this.elements.cancelEnvironmentalButton, 'click', () => {
+            this.cancelEnvironmentalDataEditing();
         });
         
-        addEventListener(this.elements.temperatureInput, 'change', () => {
-            this.saveEnvironmentalData();
-        });
-        
-        addEventListener(this.elements.cloudCoverInput, 'change', () => {
-            this.saveEnvironmentalData();
-        });
-        
-        addEventListener(this.elements.saveEnvironmentalDataButton, 'click', () => {
-            this.saveEnvironmentalDataWithFeedback();
+        addEventListener(this.elements.continueCountingButton, 'click', () => {
+            this.saveEnvironmentalDataAndContinue();
         });
         
         // Sessions
@@ -243,9 +253,15 @@ class HummelzaehlerApp {
         const savedSpecies = loadBumblebeesFromStorage();
         this.speciesManager.setSpecies(savedSpecies);
         
-        // Umweltdaten laden
-        this.environmentalData = loadEnvironmentalDataFromStorage();
-        this.updateEnvironmentalDataUI();
+        // Prüfe, ob eine aktuelle Session existiert
+        const currentSession = this.sessionManager.loadCurrentSession();
+        if (currentSession) {
+            console.log('Aktuelle Session gefunden:', currentSession.id);
+            // Session wird bei Bedarf in der UI geladen
+        }
+        
+        // Umweltdaten bleiben bei den Initial-Werten (leer)
+        // Sie werden nur bei neuen Zählungen aus der letzten Session vorausgefüllt
     }
 
     // UI initialisieren
@@ -306,7 +322,13 @@ class HummelzaehlerApp {
                 this.timer.stop();
             }
             this.resetCountingState();
+            // Aktuelle Session verwerfen (falls vorhanden und nicht im Bearbeitungsmodus)
+            if (!this.editingSession) {
+                this.sessionManager.discardCurrentSession();
+            }
             this.editingSession = null; // Bearbeitungsmodus beenden
+        } else if (page === APP_PAGES.ENVIRONMENTAL) {
+            this.prepareEnvironmentalPage();
         } else if (page === APP_PAGES.COUNTING) {
             this.prepareCountingPage();
         }
@@ -330,6 +352,10 @@ class HummelzaehlerApp {
         
         // Timer starten
         this.timer.start();
+        
+        // Neue Session erstellen mit aktuellen Umweltdaten
+        const sessionStartTime = this.timer.getSessionStartTime();
+        this.sessionManager.createNewSession(sessionStartTime, this.environmentalData);
         
         // Arten-Liste neu rendern
         this.updateSpeciesUI();
@@ -355,10 +381,16 @@ class HummelzaehlerApp {
         
         if (this.timer.isRunning() || this.timer.isFinished() || this.editingSession) {
             if (this.uiNavigation.showConfirmDialog(confirmMessage)) {
+                // Aktuelle Session verwerfen (falls vorhanden)
+                if (!this.editingSession) {
+                    this.sessionManager.discardCurrentSession();
+                }
                 this.editingSession = null; // Bearbeitungsmodus beenden
                 this.uiNavigation.showHomePage();
             }
         } else {
+            // Aktuelle Session verwerfen (falls vorhanden)
+            this.sessionManager.discardCurrentSession();
             this.editingSession = null; // Bearbeitungsmodus beenden
             this.uiNavigation.showHomePage();
         }
@@ -370,18 +402,25 @@ class HummelzaehlerApp {
             if (this.editingSession) {
                 // Session-Bearbeitung speichern
                 this.updateExistingSession();
-            } else if (this.timer.isFinished() || this.timer.isPaused() || this.timer.isRunning()) {
-                // Neue Zählung speichern (auch bei pausiert/laufend)
-                const isComplete = this.timer.isFinished();
-                const elapsedTime = this.timer.getElapsedTime();
-                
-                const sessionData = this.sessionManager.saveCountingSession(
-                    this.speciesManager.getSpeciesCopy(),
-                    this.timer.getSessionStartTime(),
-                    this.environmentalData,
-                    isComplete,
-                    elapsedTime
-                );
+            } else {
+                // Aktuelle Session speichern
+                const currentSession = this.sessionManager.getCurrentSession();
+                if (currentSession) {
+                    const isComplete = this.timer.isFinished();
+                    const elapsedTime = this.timer.getElapsedTime();
+                    
+                    // Session mit aktuellen Daten aktualisieren
+                    this.sessionManager.updateCurrentSession(
+                        this.speciesManager.getSpeciesCopy(),
+                        elapsedTime,
+                        isComplete
+                    );
+                    
+                    // Session als abgeschlossen speichern
+                    this.sessionManager.saveCurrentSession();
+                } else {
+                    throw new Error('Keine aktuelle Session gefunden.');
+                }
             }
             
             this.uiNavigation.showMessage('Zählung wurde gespeichert.');
@@ -447,20 +486,143 @@ class HummelzaehlerApp {
         renderSpeciesList(this.elements.bumblebeeList, this.speciesManager);
     }
 
+    // Aktuelle Session mit neuen Artendaten aktualisieren
+    updateCurrentSessionWithSpeciesData() {
+        const currentSession = this.sessionManager.getCurrentSession();
+        if (currentSession && this.timer.isRunning()) {
+            const elapsedTime = this.timer.getElapsedTime();
+            this.sessionManager.updateCurrentSession(
+                this.speciesManager.getSpeciesCopy(),
+                elapsedTime,
+                false // noch nicht abgeschlossen
+            );
+        }
+    }
+
+    // Umweltdaten-Seite vorbereiten
+    prepareEnvironmentalPage() {
+        // Nur bei neuer Zählung die letzten Daten laden
+        // Bei Bearbeitung während Zählung die aktuellen Session-Daten laden
+        if (!this.editingEnvironmentalFromCounting && !this.editingSession) {
+            // Neue Zählung: Lade Umweltdaten aus der letzten Session
+            this.loadLastEnvironmentalData();
+        } else if (this.editingEnvironmentalFromCounting) {
+            // Bei Bearbeitung während Zählung: Lade Daten aus der aktuellen Session
+            this.loadCurrentSessionEnvironmentalData();
+        } else if (this.editingSession) {
+            // Bei Session-Bearbeitung: Daten sind bereits in this.environmentalData geladen
+            this.updateEnvironmentalDataUI();
+        }
+        
+        // Button-Text anpassen je nach Kontext
+        if (this.editingEnvironmentalFromCounting) {
+            if (this.elements.continueCountingButton) {
+                this.elements.continueCountingButton.textContent = 'Speichern';
+            }
+        } else {
+            if (this.elements.continueCountingButton) {
+                this.elements.continueCountingButton.textContent = 'Zählung starten';
+            }
+        }
+    }
+
+    // Umweltdaten aus letzter Zählung laden (nur wenn Sessions existieren)
+    loadLastEnvironmentalData() {
+        const lastEnvironmentalData = this.sessionManager.getLastEnvironmentalData();
+        if (lastEnvironmentalData) {
+            // Übernehme Werte aus letzter Session
+            this.environmentalData = { ...lastEnvironmentalData };
+            this.updateEnvironmentalDataUI();
+            console.log('Umweltdaten aus letzter Session geladen:', this.environmentalData);
+        } else {
+            // Erste Zählung: Alles bleibt leer
+            console.log('Erste Zählung: Umweltdaten bleiben leer');
+        }
+    }
+
+    // Umweltdaten aus der aktuellen Session im localStorage laden
+    loadCurrentSessionEnvironmentalData() {
+        const currentSession = this.sessionManager.getCurrentSession();
+        if (currentSession && currentSession.environmental) {
+            // Lade Umweltdaten direkt aus der aktuellen Session
+            this.environmentalData = { ...currentSession.environmental };
+            this.updateEnvironmentalDataUI();
+            console.log('Umweltdaten aus aktueller Session geladen:', this.environmentalData);
+        } else {
+            // Fallback: Verwende aktuelle this.environmentalData
+            console.log('Keine aktuelle Session gefunden, verwende aktuelle Daten:', this.environmentalData);
+            this.updateEnvironmentalDataUI();
+        }
+    }
+
+
+    // Umweltdaten-Bearbeitung abbrechen
+    cancelEnvironmentalDataEditing() {
+        // Umweltdaten immer speichern, auch beim Abbrechen
+        this.saveEnvironmentalData();
+        
+        if (this.editingEnvironmentalFromCounting) {
+            // Zurück zur Zählung
+            this.editingEnvironmentalFromCounting = false;
+            this.uiNavigation.showCountingPage();
+        } else {
+            // Normale Navigation zur Startseite
+            this.uiNavigation.showHomePage();
+        }
+    }
+
+    // Umweltdaten während Zählung bearbeiten
+    editEnvironmentalDataDuringCounting() {
+        // Timer pausieren falls er läuft
+        if (this.timer.isRunning()) {
+            this.timer.pause();
+        }
+        
+        // Markieren, dass wir von der Zählung kommen
+        this.editingEnvironmentalFromCounting = true;
+        
+        // Aktuelle Umweltdaten der laufenden Zählung sichern
+        // (diese sind bereits in this.environmentalData)
+        console.log('Bearbeite Umweltdaten der aktuellen Zählung:', this.environmentalData);
+        
+        // Zu Umweltdaten-Seite wechseln
+        this.uiNavigation.showEnvironmentalPage();
+    }
+
+    // Umweltdaten speichern und zur Zählung weiterleiten
+    saveEnvironmentalDataAndContinue() {
+        this.saveEnvironmentalData();
+        
+        if (this.editingEnvironmentalFromCounting) {
+            // Zurück zur Zählung
+            this.editingEnvironmentalFromCounting = false;
+            this.uiNavigation.showCountingPage();
+        } else {
+            // Normale neue Zählung
+            this.uiNavigation.showCountingPage();
+        }
+    }
+
     // Umweltdaten speichern
     saveEnvironmentalData() {
         this.environmentalData = {
             windStrength: parseInt(this.elements.windStrengthInput.value) || 0,
             temperature: parseFloat(this.elements.temperatureInput.value) || null,
-            cloudCover: parseInt(this.elements.cloudCoverInput.value) || 0
+            cloudCover: parseInt(this.elements.cloudCoverInput.value) || 0,
+            mostVisitedFlower: this.elements.mostVisitedFlowerInput.value.trim() || '',
+            secondVisitedFlower: this.elements.secondVisitedFlowerInput.value.trim() || '',
+            thirdVisitedFlower: this.elements.thirdVisitedFlowerInput.value.trim() || '',
+            areaType: this.elements.areaTypeSelect.value || ''
         };
-        saveEnvironmentalDataToStorage(this.environmentalData);
-    }
-
-    // Umweltdaten mit Feedback speichern
-    saveEnvironmentalDataWithFeedback() {
-        this.saveEnvironmentalData();
-        this.uiNavigation.showEnvironmentalDataFeedback();
+        
+        // Speichere auch direkt in die aktuelle Session (falls eine läuft)
+        const currentSession = this.sessionManager.getCurrentSession();
+        if (currentSession) {
+            this.sessionManager.updateCurrentSessionEnvironmental(this.environmentalData);
+            console.log('Aktuelle Session mit neuen Umweltdaten aktualisiert');
+        }
+        
+        console.log('Umweltdaten gespeichert:', this.environmentalData);
     }
 
     // Umweltdaten-UI aktualisieren
@@ -473,6 +635,18 @@ class HummelzaehlerApp {
         }
         if (this.elements.cloudCoverInput) {
             this.elements.cloudCoverInput.value = this.environmentalData.cloudCover || 0;
+        }
+        if (this.elements.mostVisitedFlowerInput) {
+            this.elements.mostVisitedFlowerInput.value = this.environmentalData.mostVisitedFlower || '';
+        }
+        if (this.elements.secondVisitedFlowerInput) {
+            this.elements.secondVisitedFlowerInput.value = this.environmentalData.secondVisitedFlower || '';
+        }
+        if (this.elements.thirdVisitedFlowerInput) {
+            this.elements.thirdVisitedFlowerInput.value = this.environmentalData.thirdVisitedFlower || '';
+        }
+        if (this.elements.areaTypeSelect) {
+            this.elements.areaTypeSelect.value = this.environmentalData.areaType || '';
         }
     }
 
@@ -521,6 +695,9 @@ class HummelzaehlerApp {
                 return;
             }
 
+            // Aktuelle Session verwerfen (falls vorhanden)
+            this.sessionManager.discardCurrentSession();
+
             // Timer pausieren falls er läuft
             if (this.timer.isRunning()) {
                 this.timer.pause();
@@ -528,6 +705,11 @@ class HummelzaehlerApp {
 
             // Session für Bearbeitung setzen
             this.editingSession = session;
+
+            // Umweltdaten aus der Session laden
+            if (session.environmental) {
+                this.environmentalData = { ...session.environmental };
+            }
 
             // Timer mit verbleibender Zeit setzen (falls vorhanden)
             if (session.remainingTime !== undefined && session.remainingTime > 0) {
@@ -600,12 +782,21 @@ class HummelzaehlerApp {
         const currentRemainingTime = this.timer.getTimeLeft() * 1000; // Sekunden zu Millisekunden
         const isComplete = this.timer.isFinished();
 
+        // Berechne die tatsächliche Distanz basierend auf der verstrichenen Zeit
+        let actualDistance = APP_CONFIG.TARGET_DISTANCE;
+        if (currentElapsedTime !== null) {
+            const timeRatio = currentElapsedTime / (APP_CONFIG.TIMER_DURATION * 1000);
+            actualDistance = APP_CONFIG.TARGET_DISTANCE * timeRatio;
+        }
+
         // Session-Daten aktualisieren
         this.editingSession.bumblebees = updatedSpecies;
         this.editingSession.totalCount = totalCount;
         this.editingSession.elapsedTime = currentElapsedTime;
         this.editingSession.remainingTime = currentRemainingTime;
         this.editingSession.isComplete = isComplete;
+        this.editingSession.finalDistance = actualDistance;
+        this.editingSession.environmental = { ...this.environmentalData };
 
         // In Storage speichern
         const success = this.sessionManager.updateSession(this.editingSession.id, this.editingSession);

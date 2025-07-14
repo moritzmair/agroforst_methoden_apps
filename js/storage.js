@@ -42,106 +42,133 @@ export function loadBumblebeesFromStorage() {
     return [...defaultBumblebees];
 }
 
-// Umweltdaten speichern und laden
-export function saveEnvironmentalDataToStorage(environmentalData) {
-    try {
-        localStorage.setItem('environmentalData', JSON.stringify(environmentalData));
-    } catch (error) {
-        console.error('Fehler beim Speichern der Umweltdaten:', error);
-    }
-}
+// Umweltdaten werden jetzt sessionspezifisch verwaltet
+// Die alten globalen Umweltdaten-Funktionen sind nicht mehr nötig
 
-export function loadEnvironmentalDataFromStorage() {
+// Session-Verwaltung - Neue strukturierte Implementierung
+const SESSIONS_STORAGE_KEY = 'hummel_sessions';
+const CURRENT_SESSION_KEY = 'current_session';
+
+// Alle Sessions als Array laden
+export function getAllSessionsFromStorage() {
     try {
-        const savedData = localStorage.getItem('environmentalData');
-        if (savedData) {
-            return JSON.parse(savedData);
+        const sessionsData = localStorage.getItem(SESSIONS_STORAGE_KEY);
+        if (sessionsData) {
+            const sessions = JSON.parse(sessionsData);
+            // Sortiere nach Startzeit (neueste zuerst)
+            return sessions.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
         }
     } catch (error) {
-        console.error('Fehler beim Laden der Umweltdaten:', error);
+        console.error('Fehler beim Laden aller Sessions:', error);
     }
-    
-    return {
-        windStrength: 0,
-        temperature: null,
-        cloudCover: 0
-    };
+    return [];
 }
 
-// Session-Verwaltung
+// Alle Sessions als Array speichern
+function saveAllSessionsToStorage(sessions) {
+    try {
+        localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+        return true;
+    } catch (error) {
+        console.error('Fehler beim Speichern aller Sessions:', error);
+        return false;
+    }
+}
+
+// Einzelne Session speichern oder aktualisieren
 export function saveSessionToStorage(sessionKey, sessionData) {
     try {
-        localStorage.setItem(sessionKey, JSON.stringify(sessionData));
-        updateSessionsList(sessionKey);
-        return true;
+        const sessions = getAllSessionsFromStorage();
+        const existingIndex = sessions.findIndex(s => s.id === sessionKey);
+        
+        if (existingIndex !== -1) {
+            // Bestehende Session aktualisieren
+            sessions[existingIndex] = sessionData;
+        } else {
+            // Neue Session hinzufügen
+            sessions.unshift(sessionData);
+        }
+        
+        return saveAllSessionsToStorage(sessions);
     } catch (error) {
         console.error('Fehler beim Speichern der Session:', error);
         return false;
     }
 }
 
+// Einzelne Session laden
 export function loadSessionFromStorage(sessionKey) {
     try {
-        const sessionData = localStorage.getItem(sessionKey);
-        if (sessionData) {
-            return JSON.parse(sessionData);
-        }
+        const sessions = getAllSessionsFromStorage();
+        return sessions.find(s => s.id === sessionKey) || null;
     } catch (error) {
         console.error('Fehler beim Laden der Session:', sessionKey, error);
+        return null;
     }
-    return null;
 }
 
+// Session löschen
 export function deleteSessionFromStorage(sessionId) {
     try {
-        // Entferne die Session aus dem localStorage
-        localStorage.removeItem(sessionId);
+        const sessions = getAllSessionsFromStorage();
+        const filteredSessions = sessions.filter(s => s.id !== sessionId);
         
-        // Entferne die Session aus der Liste
-        let sessionsList = JSON.parse(localStorage.getItem('sessionsList') || '[]');
-        sessionsList = sessionsList.filter(id => id !== sessionId);
-        localStorage.setItem('sessionsList', JSON.stringify(sessionsList));
-        
-        console.log('Session gelöscht:', sessionId);
-        return true;
+        const success = saveAllSessionsToStorage(filteredSessions);
+        if (success) {
+            console.log('Session gelöscht:', sessionId);
+        }
+        return success;
     } catch (error) {
         console.error('Fehler beim Löschen der Session:', error);
         return false;
     }
 }
 
-export function getAllSessionsFromStorage() {
+// Aktuelle Session-Verwaltung
+export function saveCurrentSession(sessionData) {
     try {
-        const sessionsList = JSON.parse(localStorage.getItem('sessionsList') || '[]');
-        const sessions = [];
-        
-        sessionsList.forEach(sessionKey => {
-            const sessionData = loadSessionFromStorage(sessionKey);
-            if (sessionData) {
-                sessions.push(sessionData);
-            }
-        });
-        
-        return sessions;
+        localStorage.setItem(CURRENT_SESSION_KEY, JSON.stringify(sessionData));
+        return true;
     } catch (error) {
-        console.error('Fehler beim Laden aller Sessions:', error);
-        return [];
+        console.error('Fehler beim Speichern der aktuellen Session:', error);
+        return false;
     }
 }
 
-function updateSessionsList(newSessionKey) {
+export function loadCurrentSession() {
     try {
-        let sessionsList = JSON.parse(localStorage.getItem('sessionsList') || '[]');
-        
-        // Füge die neue Session zur Liste hinzu (neueste zuerst)
-        if (!sessionsList.includes(newSessionKey)) {
-            sessionsList.unshift(newSessionKey);
+        const sessionData = localStorage.getItem(CURRENT_SESSION_KEY);
+        if (sessionData) {
+            return JSON.parse(sessionData);
         }
-        
-        localStorage.setItem('sessionsList', JSON.stringify(sessionsList));
     } catch (error) {
-        console.error('Fehler beim Aktualisieren der Sessions-Liste:', error);
+        console.error('Fehler beim Laden der aktuellen Session:', error);
     }
+    return null;
+}
+
+export function clearCurrentSession() {
+    try {
+        localStorage.removeItem(CURRENT_SESSION_KEY);
+        return true;
+    } catch (error) {
+        console.error('Fehler beim Löschen der aktuellen Session:', error);
+        return false;
+    }
+}
+
+// Letzte Session für Umweltdaten-Vorausfüllung
+export function getLastSessionEnvironmentalData() {
+    try {
+        const sessions = getAllSessionsFromStorage();
+        if (sessions.length > 0) {
+            const lastSession = sessions[0]; // Neueste Session
+            return lastSession.environmental || null;
+        }
+    } catch (error) {
+        console.error('Fehler beim Laden der letzten Umweltdaten:', error);
+    }
+    return null;
 }
 
 // Update-Check Zeitstempel

@@ -1,16 +1,21 @@
 // Session-Management und Export-Funktionalität
 
 import { APP_CONFIG } from './constants.js';
-import { 
-    saveSessionToStorage, 
-    getAllSessionsFromStorage, 
+import {
+    saveSessionToStorage,
+    getAllSessionsFromStorage,
     deleteSessionFromStorage,
-    loadSessionFromStorage 
+    loadSessionFromStorage,
+    saveCurrentSession,
+    loadCurrentSession,
+    clearCurrentSession,
+    getLastSessionEnvironmentalData
 } from './storage.js';
 
 export class SessionManager {
     constructor() {
         this.onSessionsUpdate = null;
+        this.currentSession = null;
     }
 
     // Event-Handler setzen
@@ -18,8 +23,8 @@ export class SessionManager {
         this.onSessionsUpdate = callback;
     }
 
-    // Neue Zählsession speichern
-    saveCountingSession(speciesData, sessionStartTime, environmentalData, isComplete = true, elapsedTime = null) {
+    // Aktuelle Session-Verwaltung
+    createNewSession(sessionStartTime, environmentalData) {
         if (!sessionStartTime) {
             throw new Error('Keine Startzeit der Session gefunden.');
         }
@@ -30,13 +35,51 @@ export class SessionManager {
         // Formatiere das Datum für die Anzeige
         const displayDate = this.formatSessionDate(sessionStartTime);
         
+        // Erstelle das Session-Objekt
+        const sessionData = {
+            id: sessionKey,
+            startTime: sessionStartTime.toISOString(),
+            displayDate: displayDate,
+            bumblebees: [], // Wird später mit Arten gefüllt
+            totalCount: 0,
+            finalDistance: 0,
+            isComplete: false,
+            elapsedTime: 0,
+            remainingTime: APP_CONFIG.TIMER_DURATION * 1000,
+            environmental: environmentalData || {}
+        };
+        
+        // Als aktuelle Session setzen
+        this.currentSession = sessionData;
+        saveCurrentSession(sessionData);
+        
+        console.log('Neue Session erstellt:', sessionKey);
+        return sessionData;
+    }
+
+    // Aktuelle Session laden
+    loadCurrentSession() {
+        this.currentSession = loadCurrentSession();
+        return this.currentSession;
+    }
+
+    // Aktuelle Session abrufen
+    getCurrentSession() {
+        return this.currentSession;
+    }
+
+    // Aktuelle Session aktualisieren
+    updateCurrentSession(speciesData, elapsedTime, isComplete = false) {
+        if (!this.currentSession) {
+            throw new Error('Keine aktuelle Session vorhanden.');
+        }
+
         // Berechne die Gesamtanzahl der gezählten Tiere
         const totalCount = speciesData.reduce((sum, bee) => sum + bee.count, 0);
         
         // Berechne die tatsächliche Distanz basierend auf der verstrichenen Zeit
         let actualDistance = APP_CONFIG.TARGET_DISTANCE;
         if (elapsedTime !== null) {
-            // Distanz basierend auf verstrichener Zeit berechnen
             const timeRatio = elapsedTime / (APP_CONFIG.TIMER_DURATION * 1000);
             actualDistance = APP_CONFIG.TARGET_DISTANCE * timeRatio;
         }
@@ -45,15 +88,107 @@ export class SessionManager {
         let remainingTime = 0;
         if (elapsedTime !== null) {
             remainingTime = (APP_CONFIG.TIMER_DURATION * 1000) - elapsedTime;
-            remainingTime = Math.max(0, remainingTime); // Nicht negativ
+            remainingTime = Math.max(0, remainingTime);
         }
 
-        // Erstelle das Session-Objekt
+        // Session-Daten aktualisieren
+        this.currentSession.bumblebees = JSON.parse(JSON.stringify(speciesData)); // Deep copy
+        this.currentSession.totalCount = totalCount;
+        this.currentSession.finalDistance = actualDistance;
+        this.currentSession.isComplete = isComplete;
+        this.currentSession.elapsedTime = elapsedTime;
+        this.currentSession.remainingTime = remainingTime;
+
+        // In localStorage speichern
+        saveCurrentSession(this.currentSession);
+        
+        console.log('Aktuelle Session aktualisiert:', this.currentSession.id);
+        return this.currentSession;
+    }
+
+    // Aktuelle Session mit Umweltdaten aktualisieren
+    updateCurrentSessionEnvironmental(environmentalData) {
+        if (!this.currentSession) {
+            throw new Error('Keine aktuelle Session vorhanden.');
+        }
+
+        this.currentSession.environmental = { ...environmentalData };
+        saveCurrentSession(this.currentSession);
+        
+        console.log('Umweltdaten der aktuellen Session aktualisiert:', this.currentSession.id);
+        return this.currentSession;
+    }
+
+    // Aktuelle Session als abgeschlossen speichern
+    saveCurrentSession() {
+        if (!this.currentSession) {
+            throw new Error('Keine aktuelle Session vorhanden.');
+        }
+
+        const success = saveSessionToStorage(this.currentSession.id, this.currentSession);
+        
+        if (success) {
+            console.log('Aktuelle Session gespeichert:', this.currentSession.id);
+            clearCurrentSession();
+            this.currentSession = null;
+            this.notifySessionsUpdate();
+            return true;
+        } else {
+            throw new Error('Fehler beim Speichern der Session. Möglicherweise ist der Speicher voll.');
+        }
+    }
+
+    // Aktuelle Session verwerfen
+    discardCurrentSession() {
+        if (this.currentSession) {
+            clearCurrentSession();
+            this.currentSession = null;
+            console.log('Aktuelle Session verworfen');
+        }
+    }
+
+    // Letzte Umweltdaten für Vorausfüllung abrufen
+    getLastEnvironmentalData() {
+        return getLastSessionEnvironmentalData();
+    }
+
+    // Neue Zählsession speichern (Legacy-Kompatibilität)
+    saveCountingSession(speciesData, sessionStartTime, environmentalData, isComplete = true, elapsedTime = null) {
+        // Falls eine aktuelle Session existiert, aktualisiere sie
+        if (this.currentSession) {
+            this.updateCurrentSession(speciesData, elapsedTime, isComplete);
+            if (environmentalData) {
+                this.updateCurrentSessionEnvironmental(environmentalData);
+            }
+            return this.saveCurrentSession();
+        }
+        
+        // Fallback: Erstelle neue Session direkt (für Legacy-Code)
+        if (!sessionStartTime) {
+            throw new Error('Keine Startzeit der Session gefunden.');
+        }
+        
+        const sessionKey = `session_${sessionStartTime.getTime()}`;
+        const displayDate = this.formatSessionDate(sessionStartTime);
+        const totalCount = speciesData.reduce((sum, bee) => sum + bee.count, 0);
+        
+        let actualDistance = APP_CONFIG.TARGET_DISTANCE;
+        if (elapsedTime !== null) {
+            const timeRatio = elapsedTime / (APP_CONFIG.TIMER_DURATION * 1000);
+            actualDistance = APP_CONFIG.TARGET_DISTANCE * timeRatio;
+        }
+        
+        let remainingTime = 0;
+        if (elapsedTime !== null) {
+            remainingTime = (APP_CONFIG.TIMER_DURATION * 1000) - elapsedTime;
+            remainingTime = Math.max(0, remainingTime);
+        }
+
         const sessionData = {
             id: sessionKey,
             startTime: sessionStartTime.toISOString(),
             displayDate: displayDate,
-            bumblebees: JSON.parse(JSON.stringify(speciesData)), // Deep copy
+            bumblebees: JSON.parse(JSON.stringify(speciesData)),
             totalCount: totalCount,
             finalDistance: actualDistance,
             isComplete: isComplete,
@@ -189,6 +324,38 @@ export class SessionManager {
                 const environmental = session.environmental || {};
                 const cloudCover = environmental.cloudCover || '';
                 csvContent += `,${cloudCover}`;
+            });
+            csvContent += '\n';
+            
+            csvContent += 'Häufigste Blüte';
+            sessions.forEach(session => {
+                const environmental = session.environmental || {};
+                const mostVisitedFlower = environmental.mostVisitedFlower || '';
+                csvContent += `,"${mostVisitedFlower}"`;
+            });
+            csvContent += '\n';
+            
+            csvContent += '2. häufigste Blüte';
+            sessions.forEach(session => {
+                const environmental = session.environmental || {};
+                const secondVisitedFlower = environmental.secondVisitedFlower || '';
+                csvContent += `,"${secondVisitedFlower}"`;
+            });
+            csvContent += '\n';
+            
+            csvContent += '3. häufigste Blüte';
+            sessions.forEach(session => {
+                const environmental = session.environmental || {};
+                const thirdVisitedFlower = environmental.thirdVisitedFlower || '';
+                csvContent += `,"${thirdVisitedFlower}"`;
+            });
+            csvContent += '\n';
+            
+            csvContent += 'Bereich';
+            sessions.forEach(session => {
+                const environmental = session.environmental || {};
+                const areaType = environmental.areaType || '';
+                csvContent += `,"${areaType}"`;
             });
             csvContent += '\n';
             
