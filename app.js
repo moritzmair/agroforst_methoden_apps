@@ -481,22 +481,36 @@ class HummelzaehlerApp {
         button.innerHTML = '⏳ Cache wird geleert...';
         
         try {
-            // Alle Caches löschen
+            // Service Worker über Cache-Löschung informieren
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({
+                    type: 'CLEAR_CACHE'
+                });
+                console.log('Cache-Löschung an Service Worker gesendet');
+            }
+            
+            // Zusätzlich direkt alle Caches löschen
             if ('caches' in window) {
                 const cacheNames = await caches.keys();
-                console.log('Lösche Caches:', cacheNames);
+                console.log('Lösche Caches direkt:', cacheNames);
                 await Promise.all(
                     cacheNames.map(cacheName => caches.delete(cacheName))
                 );
-                console.log('Alle Caches wurden gelöscht');
+                console.log('Alle Caches wurden direkt gelöscht');
             }
             
-            // Service Worker Cache aktualisieren
+            // Service Worker neu registrieren für frischen Start
             if ('serviceWorker' in navigator) {
                 const registration = await navigator.serviceWorker.getRegistration();
                 if (registration) {
-                    await registration.update();
-                    console.log('Service Worker wurde aktualisiert');
+                    await registration.unregister();
+                    console.log('Service Worker deregistriert');
+                    
+                    // Neu registrieren
+                    await navigator.serviceWorker.register('service-worker.js', {
+                        scope: './'
+                    });
+                    console.log('Service Worker neu registriert');
                 }
             }
             
@@ -504,7 +518,7 @@ class HummelzaehlerApp {
             button.innerHTML = '✅ Cache geleert!';
             this.uiNavigation.showMessage('Cache wurde erfolgreich geleert. Die Seite wird neu geladen.');
             
-            // Nach kurzer Zeit Seite neu laden
+            // Nach kurzer Zeit Seite neu laden mit Hard Refresh
             setTimeout(() => {
                 window.location.reload(true);
             }, 1500);

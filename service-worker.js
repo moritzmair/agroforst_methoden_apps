@@ -1,5 +1,6 @@
-// Cache-Name wird dynamisch aus manifest.json geladen
-let APP_VERSION = null;
+// Service Worker für Hummelzähler PWA
+const CACHE_NAME = 'hummelzaehler-v1.0.14';
+const CACHE_VERSION = '1.0.14';
 
 // Alle Ressourcen, die für die Offline-Funktionalität benötigt werden
 const ASSETS_TO_CACHE = [
@@ -8,53 +9,37 @@ const ASSETS_TO_CACHE = [
   './styles.css',
   './app.js',
   './manifest.json',
-  './icons/icon.svg'
+  './js/constants.js',
+  './js/storage.js',
+  './js/timer.js',
+  './js/species-manager.js',
+  './js/session-manager.js',
+  './js/distance-tracker.js',
+  './js/ui-navigation.js',
+  './js/app-updater.js'
 ];
-
-// Lade Version aus manifest.json
-async function loadVersionFromManifest() {
-  try {
-    const response = await fetch('./manifest.json');
-    if (response.ok) {
-      const manifest = await response.json();
-      APP_VERSION = manifest.version;
-      CACHE_NAME = `hummelzaehler-offline-v${APP_VERSION}`;
-      console.log('[Service Worker] Version geladen:', APP_VERSION, 'Cache:', CACHE_NAME);
-      return APP_VERSION;
-    }
-  } catch (error) {
-    console.error('[Service Worker] Fehler beim Laden der Version:', error);
-  }
-  // Fallback
-  APP_VERSION = '1.0.0';
-  CACHE_NAME = `hummelzaehler-offline-v${APP_VERSION}`;
-  return APP_VERSION;
-}
 
 /**
  * Service Worker Installation
  * Beim Installieren werden alle Ressourcen in den Cache geladen
  */
 self.addEventListener('install', event => {
-  console.log('[Service Worker] Installation');
+  console.log('[Service Worker] Installation gestartet');
   
   event.waitUntil(
-    loadVersionFromManifest()
-      .then(() => {
-        console.log('[Service Worker] Öffne Cache:', CACHE_NAME);
-        return caches.open(CACHE_NAME);
-      })
+    caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[Service Worker] Alle Ressourcen werden gecacht');
+        console.log('[Service Worker] Cache geöffnet:', CACHE_NAME);
+        console.log('[Service Worker] Caching assets:', ASSETS_TO_CACHE);
         return cache.addAll(ASSETS_TO_CACHE);
       })
       .then(() => {
-        console.log('[Service Worker] Installation abgeschlossen');
-        // Nur skipWaiting wenn explizit angefordert
+        console.log('[Service Worker] Alle Ressourcen erfolgreich gecacht');
         return self.skipWaiting();
       })
       .catch(error => {
         console.error('[Service Worker] Fehler beim Cachen:', error);
+        throw error;
       })
   );
 });
@@ -64,175 +49,110 @@ self.addEventListener('install', event => {
  * Beim Aktivieren werden alte Caches gelöscht
  */
 self.addEventListener('activate', event => {
-  console.log('[Service Worker] Aktivierung');
+  console.log('[Service Worker] Aktivierung gestartet');
   
   event.waitUntil(
-    loadVersionFromManifest()
-      .then(() => {
-        return Promise.all([
-          // Lösche alte Caches
-          caches.keys().then(cacheNames => {
-            return Promise.all(
-              cacheNames.map(cacheName => {
-                if (cacheName !== CACHE_NAME) {
-                  console.log('[Service Worker] Alter Cache wird gelöscht:', cacheName);
-                  return caches.delete(cacheName);
-                }
-              })
-            );
-          }),
-          // Übernimm sofort die Kontrolle über alle Clients
-          self.clients.claim()
-        ]);
-      })
-      .then(() => {
-        console.log('[Service Worker] Aktivierung abgeschlossen mit Cache:', CACHE_NAME);
-        // Benachrichtige alle Clients über die Aktivierung
-        return self.clients.matchAll().then(clients => {
-          clients.forEach(client => {
-            client.postMessage({
-              type: 'SW_ACTIVATED',
-              cacheName: CACHE_NAME,
-              version: APP_VERSION
-            });
+    Promise.all([
+      // Lösche alte Caches
+      caches.keys().then(cacheNames => {
+        return Promise.all(
+          cacheNames.map(cacheName => {
+            if (cacheName !== CACHE_NAME) {
+              console.log('[Service Worker] Lösche alten Cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+      // Übernimm sofort die Kontrolle über alle Clients
+      self.clients.claim()
+    ]).then(() => {
+      console.log('[Service Worker] Aktivierung abgeschlossen, Cache:', CACHE_NAME);
+      // Benachrichtige alle Clients über die Aktivierung
+      return self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'SW_ACTIVATED',
+            cacheName: CACHE_NAME,
+            version: CACHE_VERSION
           });
         });
-      })
+      });
+    })
   );
 });
 
 /**
  * Fetch-Event-Handler für Netzwerkanfragen
- * Implementiert verschiedene Strategien je nach Ressourcentyp
+ * Implementiert Cache First Strategie für bessere Offline-Funktionalität
  */
 self.addEventListener('fetch', event => {
+  // Nur GET-Requests abfangen
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   const url = new URL(event.request.url);
+  
+  // Nur Requests der eigenen Domain abfangen
+  if (url.origin !== location.origin) {
+    return;
+  }
+
   console.log('[Service Worker] Fetch:', url.pathname);
-  
-  // Prüfe auf Cache-Busting Parameter (für Updates)
-  const isCacheBusting = url.searchParams.has('_t') || url.searchParams.has('t') || url.searchParams.has('_cache_bust');
-  
-  // Prüfe ob es sich um manifest.json mit Cache-Busting handelt
-  const isManifestWithCacheBusting = url.pathname.endsWith('manifest.json') && isCacheBusting;
-  
-  // Network First für HTML-Dateien, Cache-Busting Requests und manifest.json mit Cache-Busting
-  if (event.request.headers.get('accept')?.includes('text/html') || isCacheBusting || isManifestWithCacheBusting) {
-    event.respondWith(
-      fetch(event.request, {
-        cache: isCacheBusting ? 'no-cache' : 'default',
-        headers: isCacheBusting ? {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        } : {}
-      })
-        .then(response => {
-          // Wenn Netzwerk verfügbar, speichere im Cache und gib zurück
-          if (response && response.status === 200) {
+
+  event.respondWith(
+    caches.match(event.request)
+      .then(cachedResponse => {
+        // Cache Hit - gib gecachte Version zurück
+        if (cachedResponse) {
+          console.log('[Service Worker] Cache Hit:', url.pathname);
+          return cachedResponse;
+        }
+
+        // Cache Miss - versuche Netzwerk
+        console.log('[Service Worker] Cache Miss, versuche Netzwerk:', url.pathname);
+        return fetch(event.request)
+          .then(response => {
+            // Prüfe ob Response gültig ist
+            if (!response || response.status !== 200 || response.type !== 'basic') {
+              return response;
+            }
+
+            // Clone Response für Cache
             const responseToCache = response.clone();
+            
+            // Füge zum Cache hinzu
             caches.open(CACHE_NAME)
               .then(cache => {
-                // Bei Cache-Busting, verwende die ursprüngliche URL ohne Parameter
-                const cacheRequest = isCacheBusting ?
-                  new Request(url.origin + url.pathname) :
-                  event.request;
-                cache.put(cacheRequest, responseToCache);
-                console.log('[Service Worker] Ressource aus Netzwerk gecacht:', cacheRequest.url);
+                cache.put(event.request, responseToCache);
+                console.log('[Service Worker] Neue Ressource gecacht:', url.pathname);
+              })
+              .catch(error => {
+                console.error('[Service Worker] Fehler beim Cachen:', error);
               });
+
             return response;
-          }
-          return response;
-        })
-        .catch(() => {
-          // Fallback auf Cache wenn Netzwerk nicht verfügbar
-          console.log('[Service Worker] Netzwerk nicht verfügbar, verwende Cache');
-          const cacheRequest = isCacheBusting ?
-            new Request(url.origin + url.pathname) :
-            event.request;
-          return caches.match(cacheRequest)
-            .then(cachedResponse => {
-              return cachedResponse || caches.match('./index.html');
+          })
+          .catch(error => {
+            console.error('[Service Worker] Netzwerk-Fehler:', error);
+            
+            // Fallback für HTML-Requests
+            if (event.request.headers.get('accept')?.includes('text/html')) {
+              return caches.match('./index.html');
+            }
+            
+            // Für andere Requests, gib Fehler zurück
+            return new Response('Offline: Ressource nicht verfügbar', {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: new Headers({
+                'Content-Type': 'text/plain'
+              })
             });
-        })
-    );
-  } else {
-    // Stale While Revalidate für kritische App-Dateien (JS, CSS, JSON außer manifest.json mit Cache-Busting)
-    const isCriticalFile = url.pathname.endsWith('.js') ||
-                          url.pathname.endsWith('.css') ||
-                          (url.pathname.endsWith('.json') && !isManifestWithCacheBusting);
-    
-    if (isCriticalFile) {
-      event.respondWith(
-        caches.match(event.request)
-          .then(cachedResponse => {
-            // Starte Netzwerk-Request im Hintergrund
-            const fetchPromise = fetch(event.request)
-              .then(response => {
-                if (response && response.status === 200) {
-                  const responseToCache = response.clone();
-                  caches.open(CACHE_NAME)
-                    .then(cache => {
-                      cache.put(event.request, responseToCache);
-                      console.log('[Service Worker] Kritische Datei aktualisiert:', event.request.url);
-                    });
-                }
-                return response;
-              })
-              .catch(error => {
-                console.log('[Service Worker] Netzwerk-Update fehlgeschlagen:', error);
-                return null;
-              });
-            
-            // Gib Cache-Version zurück falls vorhanden, sonst warte auf Netzwerk
-            if (cachedResponse) {
-              console.log('[Service Worker] Liefere aus Cache (wird im Hintergrund aktualisiert):', event.request.url);
-              return cachedResponse;
-            } else {
-              console.log('[Service Worker] Nicht im Cache, warte auf Netzwerk:', event.request.url);
-              return fetchPromise;
-            }
-          })
-      );
-    } else {
-      // Cache First für andere Ressourcen (Bilder, Icons, etc.)
-      event.respondWith(
-        caches.match(event.request)
-          .then(cachedResponse => {
-            if (cachedResponse) {
-              console.log('[Service Worker] Liefere aus Cache:', event.request.url);
-              return cachedResponse;
-            }
-            
-            console.log('[Service Worker] Nicht im Cache, versuche Netzwerk:', event.request.url);
-            return fetch(event.request)
-              .then(response => {
-                if (!response || response.status !== 200) {
-                  return response;
-                }
-                
-                const responseToCache = response.clone();
-                caches.open(CACHE_NAME)
-                  .then(cache => {
-                    cache.put(event.request, responseToCache);
-                    console.log('[Service Worker] Neue Ressource gecacht:', event.request.url);
-                  });
-                  
-                return response;
-              })
-              .catch(error => {
-                console.error('[Service Worker] Fetch fehlgeschlagen:', error);
-                return new Response('Offline: Ressource nicht verfügbar', {
-                  status: 503,
-                  statusText: 'Service Unavailable',
-                  headers: new Headers({
-                    'Content-Type': 'text/plain'
-                  })
-                });
-              });
-          })
-      );
-    }
-  }
+          });
+      })
+  );
 });
 
 /**
@@ -244,6 +164,30 @@ self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     console.log('[Service Worker] SKIP_WAITING angefordert');
     self.skipWaiting();
+  }
+  
+  if (event.data && event.data.type === 'CLEAR_CACHE') {
+    console.log('[Service Worker] Cache-Löschung angefordert');
+    event.waitUntil(
+      caches.keys().then(cacheNames => {
+        return Promise.all(
+          cacheNames.map(cacheName => {
+            console.log('[Service Worker] Lösche Cache:', cacheName);
+            return caches.delete(cacheName);
+          })
+        );
+      }).then(() => {
+        console.log('[Service Worker] Alle Caches gelöscht');
+        // Benachrichtige Client über erfolgreiche Cache-Löschung
+        self.clients.matchAll().then(clients => {
+          clients.forEach(client => {
+            client.postMessage({
+              type: 'CACHE_CLEARED'
+            });
+          });
+        });
+      })
+    );
   }
   
   // Antwort an Client senden
