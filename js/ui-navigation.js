@@ -65,13 +65,43 @@ export class UINavigation {
     }
 
     // Button-Sichtbarkeit für Zählungsseite verwalten
-    updateCountingButtons(state) {
-        const { startButton, pauseButton, cancelButton, saveButton } = this.elements;
+    updateCountingButtons(state, isEditingSession = false) {
+        const { startCountingButton, pauseButton, cancelButton, saveButton } = this.elements;
+        const startButton = startCountingButton; // Alias für Kompatibilität
+        
+        if (isEditingSession) {
+            // Bei Session-Bearbeitung: Speichern-Button immer anzeigen
+            if (state === 'finished') {
+                this.hideElements([startButton, pauseButton]);
+                this.showElements([saveButton, cancelButton]);
+                this.updateCountingStatus('Session bearbeiten - Zählung war bereits beendet');
+            } else if (state === 'running') {
+                // Timer läuft: Pausieren-Button anzeigen
+                this.hideElements([startButton, saveButton]);
+                this.showElements([pauseButton, cancelButton]);
+                this.updateCountingStatus('Session bearbeiten - Zählung läuft');
+                if (pauseButton) pauseButton.textContent = 'Pausieren';
+            } else if (state === 'paused') {
+                // Timer pausiert: Fortsetzen-Button (pauseButton) anzeigen
+                this.hideElements([startButton]);
+                this.showElements([pauseButton, cancelButton, saveButton]);
+                this.updateCountingStatus('Session bearbeiten - Zählung pausiert');
+                if (pauseButton) pauseButton.textContent = 'Fortsetzen';
+            } else {
+                // Timer gestoppt: Start-Button anzeigen
+                this.showElements([startButton, saveButton, cancelButton]);
+                this.hideElements([pauseButton]);
+                if (startButton) startButton.textContent = 'Fortsetzen';
+                this.updateCountingStatus('Session bearbeiten - Zählung kann fortgesetzt werden');
+            }
+            return;
+        }
         
         switch (state) {
             case 'ready':
                 this.showElements([startButton]);
                 this.hideElements([pauseButton, saveButton]);
+                if (startButton) startButton.textContent = 'Zählung starten';
                 this.updateCountingStatus('Bereit zum Zählen');
                 break;
                 
@@ -83,9 +113,9 @@ export class UINavigation {
                 break;
                 
             case 'paused':
-                this.hideElements([startButton, saveButton]);
-                this.showElements([pauseButton, cancelButton]);
-                this.updateCountingStatus('Zählung pausiert');
+                this.hideElements([startButton]);
+                this.showElements([pauseButton, cancelButton, saveButton]);
+                this.updateCountingStatus('Zählung pausiert - Speichern möglich');
                 if (pauseButton) pauseButton.textContent = 'Fortsetzen';
                 break;
                 

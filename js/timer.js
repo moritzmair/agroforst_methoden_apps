@@ -147,14 +147,29 @@ export class Timer {
         return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 
-    // Verstrichene Zeit berechnen
+    // Verstrichene Zeit berechnen (in Millisekunden)
     getElapsedTime() {
-        return APP_CONFIG.TIMER_DURATION - this.timeLeft;
+        return (APP_CONFIG.TIMER_DURATION - this.timeLeft) * 1000;
     }
 
     // Fortschritt in Prozent
     getProgress() {
         return (this.getElapsedTime() / APP_CONFIG.TIMER_DURATION) * 100;
+    }
+
+    // Timer mit spezifischer verbleibender Zeit setzen (für Session-Bearbeitung)
+    setRemainingTime(remainingTimeMs) {
+        if (remainingTimeMs <= 0) {
+            this.timeLeft = 0;
+            this.state = TIMER_STATES.FINISHED;
+        } else {
+            this.timeLeft = Math.ceil(remainingTimeMs / 1000); // Millisekunden zu Sekunden
+            this.state = TIMER_STATES.STOPPED;
+        }
+        
+        if (this.onStateChange) {
+            this.onStateChange(this.state);
+        }
     }
 }
 

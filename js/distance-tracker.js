@@ -8,11 +8,17 @@ export class DistanceTracker {
         this.interval = null;
         this.isTracking = false;
         this.onUpdate = null;
+        this.timer = null; // Referenz zum Timer
     }
 
     // Event-Handler setzen
     setOnUpdate(callback) {
         this.onUpdate = callback;
+    }
+
+    // Timer-Referenz setzen
+    setTimer(timer) {
+        this.timer = timer;
     }
 
     // Tracking starten
@@ -21,8 +27,9 @@ export class DistanceTracker {
 
         this.isTracking = true;
         this.interval = setInterval(() => {
-            if (this.onUpdate) {
-                this.onUpdate(this.getCurrentDistance(), this.getCurrentProgress());
+            if (this.onUpdate && this.timer) {
+                const elapsedTime = this.timer.getElapsedTime();
+                this.onUpdate(this.getCurrentDistance(elapsedTime), this.getCurrentProgress(elapsedTime));
             }
         }, 1000);
     }
@@ -48,7 +55,9 @@ export class DistanceTracker {
             return 0;
         }
         
-        const targetDistance = (elapsedTime / APP_CONFIG.TIMER_DURATION) * this.totalDistance;
+        // elapsedTime ist in Millisekunden, TIMER_DURATION in Sekunden
+        const timerDurationMs = APP_CONFIG.TIMER_DURATION * 1000;
+        const targetDistance = (elapsedTime / timerDurationMs) * this.totalDistance;
         return Math.min(targetDistance, this.totalDistance);
     }
 

@@ -35,6 +35,9 @@ class HummelzaehlerApp {
             temperature: null,
             cloudCover: 0
         };
+        
+        // Session-Bearbeitung
+        this.editingSession = null;
     }
 
     // App initialisieren
@@ -115,19 +118,23 @@ class HummelzaehlerApp {
 
     // Module konfigurieren
     setupModules() {
-        // Timer-Events
-        this.timer.setOnTick((timeLeft) => {
-            updateTimerDisplay(this.elements.timerElement, this.timer);
-            // Distanz-Tracking aktualisieren
-            const elapsedTime = this.timer.getElapsedTime();
-            const distance = this.distanceTracker.getCurrentDistance(elapsedTime);
-            const progress = this.distanceTracker.getCurrentProgress(elapsedTime);
+        // DistanceTracker mit Timer-Referenz konfigurieren
+        this.distanceTracker.setTimer(this.timer);
+        
+        // DistanceTracker Update-Callback setzen
+        this.distanceTracker.setOnUpdate((distance, progress) => {
             updateDistanceVisualization(
                 this.elements.targetDistanceElement,
                 this.elements.targetPositionElement,
                 distance,
                 progress
             );
+        });
+        
+        // Timer-Events
+        this.timer.setOnTick((timeLeft) => {
+            updateTimerDisplay(this.elements.timerElement, this.timer);
+            // Distanz-Tracking wird jetzt automatisch vom DistanceTracker selbst aktualisiert
         });
         
         this.timer.setOnFinish(() => {
@@ -168,7 +175,7 @@ class HummelzaehlerApp {
         
         // Timer-Steuerung
         addEventListener(this.elements.startCountingButton, 'click', () => {
-            this.startCounting();
+            this.handleStartButtonClick();
         });
         
         addEventListener(this.elements.pauseButton, 'click', () => {
@@ -264,21 +271,21 @@ class HummelzaehlerApp {
     handleTimerStateChange(state) {
         switch (state) {
             case TIMER_STATES.RUNNING:
-                this.uiNavigation.updateCountingButtons('running');
+                this.uiNavigation.updateCountingButtons('running', this.editingSession !== null);
                 this.distanceTracker.start();
                 break;
                 
             case TIMER_STATES.PAUSED:
-                this.uiNavigation.updateCountingButtons('paused');
+                this.uiNavigation.updateCountingButtons('paused', this.editingSession !== null);
                 break;
                 
             case TIMER_STATES.STOPPED:
-                this.uiNavigation.updateCountingButtons('ready');
+                this.uiNavigation.updateCountingButtons('ready', this.editingSession !== null);
                 this.distanceTracker.stop();
                 break;
                 
             case TIMER_STATES.FINISHED:
-                this.uiNavigation.updateCountingButtons('finished');
+                this.uiNavigation.updateCountingButtons('finished', this.editingSession !== null);
                 this.distanceTracker.stop();
                 break;
         }
@@ -299,12 +306,24 @@ class HummelzaehlerApp {
                 this.timer.stop();
             }
             this.resetCountingState();
+            this.editingSession = null; // Bearbeitungsmodus beenden
         } else if (page === APP_PAGES.COUNTING) {
             this.prepareCountingPage();
         }
     }
 
-    // Zählung starten
+    // Start-Button-Klick behandeln (unterscheidet zwischen neuer Zählung und Fortsetzen)
+    handleStartButtonClick() {
+        if (this.editingSession) {
+            // Bei Session-Bearbeitung: Timer fortsetzen ohne Zähler zurückzusetzen
+            this.resumeCounting();
+        } else {
+            // Neue Zählung starten
+            this.startCounting();
+        }
+    }
+
+    // Zählung starten (neue Zählung)
     startCounting() {
         // Arten-Zähler zurücksetzen
         this.speciesManager.resetAllCounts();
@@ -316,40 +335,73 @@ class HummelzaehlerApp {
         this.updateSpeciesUI();
     }
 
+    // Zählung fortsetzen (bei Session-Bearbeitung)
+    resumeCounting() {
+        // Timer fortsetzen ohne Zähler zurückzusetzen
+        // Bei Session-Bearbeitung ist der Timer immer im PAUSED Status
+        this.timer.resume();
+        
+        // Arten-Liste neu rendern (ohne Zähler zurückzusetzen)
+        this.updateSpeciesUI();
+    }
+
     // Zählung abbrechen
     cancelCounting() {
-        if (this.timer.isRunning() || this.timer.isFinished()) {
-            if (this.uiNavigation.showConfirmDialog('Möchtest du die Zählung wirklich abbrechen? Alle Daten gehen verloren.')) {
+        let confirmMessage = 'Möchtest du die Zählung wirklich abbrechen? Alle Daten gehen verloren.';
+        
+        if (this.editingSession) {
+            confirmMessage = 'Möchtest du die Bearbeitung wirklich abbrechen? Alle Änderungen gehen verloren.';
+        }
+        
+        if (this.timer.isRunning() || this.timer.isFinished() || this.editingSession) {
+            if (this.uiNavigation.showConfirmDialog(confirmMessage)) {
+                this.editingSession = null; // Bearbeitungsmodus beenden
                 this.uiNavigation.showHomePage();
             }
         } else {
+            this.editingSession = null; // Bearbeitungsmodus beenden
             this.uiNavigation.showHomePage();
         }
     }
 
     // Zählung speichern
     saveCounting() {
-        if (this.timer.isFinished()) {
-            try {
+        try {
+            if (this.editingSession) {
+                // Session-Bearbeitung speichern
+                this.updateExistingSession();
+            } else if (this.timer.isFinished() || this.timer.isPaused() || this.timer.isRunning()) {
+                // Neue Zählung speichern (auch bei pausiert/laufend)
+                const isComplete = this.timer.isFinished();
+                const elapsedTime = this.timer.getElapsedTime();
+                
                 const sessionData = this.sessionManager.saveCountingSession(
                     this.speciesManager.getSpeciesCopy(),
                     this.timer.getSessionStartTime(),
-                    this.environmentalData
+                    this.environmentalData,
+                    isComplete,
+                    elapsedTime
                 );
-                
-                this.uiNavigation.showMessage('Zählung wurde gespeichert.');
-                this.uiNavigation.showHomePage();
-                
-            } catch (error) {
-                console.error('Fehler beim Speichern:', error);
-                this.uiNavigation.showMessage('Fehler beim Speichern der Zählung: ' + error.message);
             }
+            
+            this.uiNavigation.showMessage('Zählung wurde gespeichert.');
+            this.editingSession = null; // Bearbeitungsmodus beenden
+            this.uiNavigation.showHomePage();
+            
+        } catch (error) {
+            console.error('Fehler beim Speichern:', error);
+            this.uiNavigation.showMessage('Fehler beim Speichern der Zählung: ' + error.message);
         }
     }
 
     // Zählungsseite vorbereiten
     prepareCountingPage() {
-        this.resetCountingState();
+        if (!this.editingSession) {
+            this.resetCountingState();
+        } else {
+            // Bei Session-Bearbeitung: Buttons entsprechend setzen
+            this.uiNavigation.updateCountingButtons('ready', true);
+        }
         this.updateSpeciesUI();
     }
 
@@ -441,7 +493,10 @@ class HummelzaehlerApp {
         
         if (!sessionId) return;
         
-        if (target.classList.contains('detail-button')) {
+        if (target.classList.contains('edit-button')) {
+            this.editSession(sessionId);
+            
+        } else if (target.classList.contains('detail-button')) {
             const details = this.sessionManager.formatSessionDetails(sessionId);
             this.uiNavigation.showMessage(details);
             
@@ -454,6 +509,109 @@ class HummelzaehlerApp {
                     this.uiNavigation.showMessage('Fehler beim Löschen der Zählung.');
                 }
             }
+        }
+    }
+
+    // Session bearbeiten
+    editSession(sessionId) {
+        try {
+            const session = this.sessionManager.getSessionDetails(sessionId);
+            if (!session) {
+                this.uiNavigation.showMessage('Zählung nicht gefunden.');
+                return;
+            }
+
+            // Timer pausieren falls er läuft
+            if (this.timer.isRunning()) {
+                this.timer.pause();
+            }
+
+            // Session für Bearbeitung setzen
+            this.editingSession = session;
+
+            // Timer mit verbleibender Zeit setzen (falls vorhanden)
+            if (session.remainingTime !== undefined && session.remainingTime > 0) {
+                // Timer stoppen und verbleibende Zeit manuell setzen
+                this.timer.stop();
+                this.timer.timeLeft = Math.ceil(session.remainingTime / 1000); // Millisekunden zu Sekunden
+                this.timer.state = TIMER_STATES.PAUSED; // Als pausiert markieren, damit resume() funktioniert
+                // Session-Startzeit für Distanz-Tracking setzen
+                this.timer.sessionStartTime = new Date(session.startTime);
+                
+                // Timer-State-Change-Event auslösen für korrekte Button-Anzeige
+                if (this.timer.onStateChange) {
+                    this.timer.onStateChange(this.timer.state);
+                }
+            } else if (session.isComplete === false) {
+                // Fallback für ältere Sessions ohne remainingTime - als beendet markieren
+                this.timer.stop();
+                this.timer.timeLeft = 0;
+                this.timer.state = TIMER_STATES.FINISHED;
+                this.timer.sessionStartTime = new Date(session.startTime);
+                
+                if (this.timer.onStateChange) {
+                    this.timer.onStateChange(this.timer.state);
+                }
+            } else {
+                // Vollständige Session - Timer zurücksetzen
+                this.timer.stop();
+                this.timer.sessionStartTime = new Date(session.startTime);
+            }
+            
+            // Timer-Display aktualisieren
+            updateTimerDisplay(this.elements.timerElement, this.timer);
+            
+            // Distanz-Tracking für bearbeitete Session aktualisieren
+            if (session.elapsedTime) {
+                const distance = this.distanceTracker.getCurrentDistance(session.elapsedTime);
+                const progress = this.distanceTracker.getCurrentProgress(session.elapsedTime);
+                updateDistanceVisualization(
+                    this.elements.targetDistanceElement,
+                    this.elements.targetPositionElement,
+                    distance,
+                    progress
+                );
+            }
+
+            // Arten-Daten aus der Session laden
+            this.speciesManager.setSpecies(session.bumblebees);
+
+            // Zur Zählungsseite wechseln
+            this.uiNavigation.showCountingPage();
+
+        } catch (error) {
+            console.error('Fehler beim Laden der Session:', error);
+            this.uiNavigation.showMessage('Fehler beim Laden der Zählung: ' + error.message);
+        }
+    }
+
+    // Bestehende Session aktualisieren
+    updateExistingSession() {
+        if (!this.editingSession) return;
+
+        // Aktualisierte Arten-Daten
+        const updatedSpecies = this.speciesManager.getSpeciesCopy();
+        
+        // Gesamtanzahl neu berechnen
+        const totalCount = updatedSpecies.reduce((sum, bee) => sum + bee.count, 0);
+
+        // Timer-Daten aktualisieren
+        const currentElapsedTime = this.timer.getElapsedTime();
+        const currentRemainingTime = this.timer.getTimeLeft() * 1000; // Sekunden zu Millisekunden
+        const isComplete = this.timer.isFinished();
+
+        // Session-Daten aktualisieren
+        this.editingSession.bumblebees = updatedSpecies;
+        this.editingSession.totalCount = totalCount;
+        this.editingSession.elapsedTime = currentElapsedTime;
+        this.editingSession.remainingTime = currentRemainingTime;
+        this.editingSession.isComplete = isComplete;
+
+        // In Storage speichern
+        const success = this.sessionManager.updateSession(this.editingSession.id, this.editingSession);
+        
+        if (!success) {
+            throw new Error('Fehler beim Aktualisieren der Session.');
         }
     }
 

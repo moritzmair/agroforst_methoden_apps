@@ -19,7 +19,7 @@ export class SessionManager {
     }
 
     // Neue Zählsession speichern
-    saveCountingSession(speciesData, sessionStartTime, environmentalData) {
+    saveCountingSession(speciesData, sessionStartTime, environmentalData, isComplete = true, elapsedTime = null) {
         if (!sessionStartTime) {
             throw new Error('Keine Startzeit der Session gefunden.');
         }
@@ -33,6 +33,21 @@ export class SessionManager {
         // Berechne die Gesamtanzahl der gezählten Tiere
         const totalCount = speciesData.reduce((sum, bee) => sum + bee.count, 0);
         
+        // Berechne die tatsächliche Distanz basierend auf der verstrichenen Zeit
+        let actualDistance = APP_CONFIG.TARGET_DISTANCE;
+        if (elapsedTime !== null) {
+            // Distanz basierend auf verstrichener Zeit berechnen
+            const timeRatio = elapsedTime / (APP_CONFIG.TIMER_DURATION * 1000);
+            actualDistance = APP_CONFIG.TARGET_DISTANCE * timeRatio;
+        }
+        
+        // Berechne verbleibende Zeit
+        let remainingTime = 0;
+        if (elapsedTime !== null) {
+            remainingTime = (APP_CONFIG.TIMER_DURATION * 1000) - elapsedTime;
+            remainingTime = Math.max(0, remainingTime); // Nicht negativ
+        }
+
         // Erstelle das Session-Objekt
         const sessionData = {
             id: sessionKey,
@@ -40,7 +55,10 @@ export class SessionManager {
             displayDate: displayDate,
             bumblebees: JSON.parse(JSON.stringify(speciesData)), // Deep copy
             totalCount: totalCount,
-            finalDistance: APP_CONFIG.TARGET_DISTANCE, // Immer die volle Zieldistanz, da zeitbasiert
+            finalDistance: actualDistance,
+            isComplete: isComplete,
+            elapsedTime: elapsedTime,
+            remainingTime: remainingTime,
             environmental: environmentalData || {}
         };
         
@@ -63,6 +81,15 @@ export class SessionManager {
     // Session löschen
     deleteSession(sessionId) {
         const success = deleteSessionFromStorage(sessionId);
+        if (success) {
+            this.notifySessionsUpdate();
+        }
+        return success;
+    }
+
+    // Session aktualisieren
+    updateSession(sessionId, sessionData) {
+        const success = saveSessionToStorage(sessionId, sessionData);
         if (success) {
             this.notifySessionsUpdate();
         }
@@ -271,15 +298,39 @@ export function renderSessionsList(container, sessionManager) {
     sessions.forEach(session => {
         const sessionItem = document.createElement('div');
         sessionItem.className = 'session-item';
+        // Status-Anzeige für vollständige vs. vorzeitig beendete Zählungen
+        const statusText = session.isComplete !== false ? 'Vollständig' : 'Vorzeitig beendet';
+        const statusClass = session.isComplete !== false ? 'status-complete' : 'status-incomplete';
+        
+        // Zeitanzeige für vorzeitig beendete Zählungen
+        let timeInfo = '';
+        if (session.isComplete === false) {
+            if (session.elapsedTime) {
+                const elapsedMinutes = Math.floor(session.elapsedTime / 60000);
+                const elapsedSeconds = Math.floor((session.elapsedTime % 60000) / 1000);
+                timeInfo = ` | Gelaufen: ${elapsedMinutes}:${elapsedSeconds.toString().padStart(2, '0')}`;
+            }
+            
+            if (session.remainingTime && session.remainingTime > 0) {
+                const remainingMinutes = Math.floor(session.remainingTime / 60000);
+                const remainingSeconds = Math.floor((session.remainingTime % 60000) / 1000);
+                timeInfo += ` | Verbleibend: ${remainingMinutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+            }
+        }
+        
         sessionItem.innerHTML = `
             <div class="session-info">
                 <div class="session-date">${session.displayDate}</div>
                 <div class="session-details">
                     Gesamt: ${session.totalCount} Tiere |
-                    Distanz: ${session.finalDistance.toFixed(1)}m
+                    Distanz: ${session.finalDistance.toFixed(1)}m${timeInfo}
                 </div>
+                <div class="session-status ${statusClass}">${statusText}</div>
             </div>
             <div class="session-actions">
+                <button class="session-button edit-button" data-session-id="${session.id}">
+                    Bearbeiten
+                </button>
                 <button class="session-button detail-button" data-session-id="${session.id}">
                     Details
                 </button>
