@@ -266,11 +266,14 @@ export class SessionManager {
         }
         
         try {
+            // Umkehrung der Sessions-Reihenfolge für CSV: älteste zuerst, neueste zuletzt
+            const sessionsForCSV = [...sessions].reverse();
+            
             let csvContent = '';
             
             // Sammle alle vorkommenden Arten
             const allSpecies = new Set();
-            sessions.forEach(session => {
+            sessionsForCSV.forEach(session => {
                 session.bumblebees.forEach(bee => {
                     if (bee.count > 0) {
                         allSpecies.add(bee.name);
@@ -287,14 +290,14 @@ export class SessionManager {
             
             // Header-Zeile mit Zählungsnummern
             csvContent += 'Art';
-            sessions.forEach((session, index) => {
+            sessionsForCSV.forEach((session, index) => {
                 csvContent += `,Zaehlung_${index + 1}`;
             });
             csvContent += '\n';
 
             // Zeitpunkt-Zeile
             csvContent += 'Zeitpunkt';
-            sessions.forEach((session, index) => {
+            sessionsForCSV.forEach((session, index) => {
                 const sessionDate = new Date(session.startTime);
                 const dateStr = sessionDate.toLocaleDateString('de-DE');
                 const timeStr = sessionDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -304,7 +307,7 @@ export class SessionManager {
             
             // Umweltdaten-Zeilen
             csvContent += 'Windstärke';
-            sessions.forEach(session => {
+            sessionsForCSV.forEach(session => {
                 const environmental = session.environmental || {};
                 const windStrength = environmental.windStrength || '';
                 csvContent += `,${windStrength}`;
@@ -312,7 +315,7 @@ export class SessionManager {
             csvContent += '\n';
             
             csvContent += 'Temperatur (°C)';
-            sessions.forEach(session => {
+            sessionsForCSV.forEach(session => {
                 const environmental = session.environmental || {};
                 const temperature = environmental.temperature !== null ? environmental.temperature : '';
                 csvContent += `,${temperature}`;
@@ -320,7 +323,7 @@ export class SessionManager {
             csvContent += '\n';
             
             csvContent += 'Wolkenbedeckung (0-8)';
-            sessions.forEach(session => {
+            sessionsForCSV.forEach(session => {
                 const environmental = session.environmental || {};
                 const cloudCover = environmental.cloudCover || '';
                 csvContent += `,${cloudCover}`;
@@ -328,7 +331,7 @@ export class SessionManager {
             csvContent += '\n';
             
             csvContent += 'Häufigste Blüte';
-            sessions.forEach(session => {
+            sessionsForCSV.forEach(session => {
                 const environmental = session.environmental || {};
                 const mostVisitedFlower = environmental.mostVisitedFlower || '';
                 csvContent += `,"${mostVisitedFlower}"`;
@@ -336,7 +339,7 @@ export class SessionManager {
             csvContent += '\n';
             
             csvContent += '2. häufigste Blüte';
-            sessions.forEach(session => {
+            sessionsForCSV.forEach(session => {
                 const environmental = session.environmental || {};
                 const secondVisitedFlower = environmental.secondVisitedFlower || '';
                 csvContent += `,"${secondVisitedFlower}"`;
@@ -344,7 +347,7 @@ export class SessionManager {
             csvContent += '\n';
             
             csvContent += '3. häufigste Blüte';
-            sessions.forEach(session => {
+            sessionsForCSV.forEach(session => {
                 const environmental = session.environmental || {};
                 const thirdVisitedFlower = environmental.thirdVisitedFlower || '';
                 csvContent += `,"${thirdVisitedFlower}"`;
@@ -352,7 +355,7 @@ export class SessionManager {
             csvContent += '\n';
             
             csvContent += 'Bereich';
-            sessions.forEach(session => {
+            sessionsForCSV.forEach(session => {
                 const environmental = session.environmental || {};
                 const areaType = environmental.areaType || '';
                 csvContent += `,"${areaType}"`;
@@ -366,7 +369,7 @@ export class SessionManager {
             speciesArray.forEach(speciesName => {
                 csvContent += `"${speciesName}"`;
                 
-                sessions.forEach(session => {
+                sessionsForCSV.forEach(session => {
                     const bee = session.bumblebees.find(b => b.name === speciesName);
                     const count = bee ? bee.count : 0;
                     csvContent += `,${count}`;
@@ -381,7 +384,7 @@ export class SessionManager {
             
             this.downloadCSV(csvContent, filename);
             
-            return `CSV-Datei mit ${sessions.length} Zählungen wurde heruntergeladen.`;
+            return `CSV-Datei mit ${sessionsForCSV.length} Zählungen wurde heruntergeladen.`;
             
         } catch (error) {
             console.error('Fehler beim Erstellen der CSV-Datei:', error);

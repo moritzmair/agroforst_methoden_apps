@@ -192,19 +192,46 @@ export class UINavigation {
         });
     }
 
-    // Umweltdaten-Feedback anzeigen
-    showEnvironmentalDataFeedback() {
-        alert('Umweltdaten wurden erfolgreich gespeichert.');
-    }
-
     // Bestätigungsdialog anzeigen
     showConfirmDialog(message) {
         return confirm(message);
     }
 
-    // Einfache Nachricht anzeigen
+    // Einfache Nachricht anzeigen (Toast-Benachrichtigung)
     showMessage(message) {
-        alert(message);
+        this.showToast(message);
+    }
+
+    // Toast-Benachrichtigung anzeigen
+    showToast(message, duration = 3000) {
+        // Entferne vorherige Toast-Nachrichten
+        const existingToast = document.querySelector('.toast-notification');
+        if (existingToast) {
+            existingToast.remove();
+        }
+
+        // Erstelle Toast-Element
+        const toast = document.createElement('div');
+        toast.className = 'toast-notification';
+        toast.textContent = message;
+        
+        // Füge Toast zum Body hinzu
+        document.body.appendChild(toast);
+        
+        // Zeige Toast mit Animation
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 10);
+        
+        // Entferne Toast nach der angegebenen Zeit
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        }, duration);
     }
 
     // Eingabedialog anzeigen

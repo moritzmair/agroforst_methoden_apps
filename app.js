@@ -423,7 +423,6 @@ class HummelzaehlerApp {
                 }
             }
             
-            this.uiNavigation.showMessage('Zählung wurde gespeichert.');
             this.editingSession = null; // Bearbeitungsmodus beenden
             this.uiNavigation.showHomePage();
             
@@ -476,7 +475,6 @@ class HummelzaehlerApp {
             if (deleted) {
                 this.updateSpeciesUI();
                 renderCustomSpeciesSelect(this.elements.customSpeciesSelect, this.speciesManager);
-                this.uiNavigation.showMessage(`Die Art "${deleted.name}" wurde erfolgreich gelöscht.`);
             }
         }
     }
@@ -678,7 +676,6 @@ class HummelzaehlerApp {
             const displayDate = target.dataset.displayDate;
             if (this.uiNavigation.showConfirmDialog(`Möchtest du die Zählung vom ${displayDate} wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
                 if (this.sessionManager.deleteSession(sessionId)) {
-                    this.uiNavigation.showMessage('Zählung erfolgreich gelöscht.');
                 } else {
                     this.uiNavigation.showMessage('Fehler beim Löschen der Zählung.');
                 }
@@ -858,7 +855,6 @@ class HummelzaehlerApp {
             
             // Erfolgs-Feedback
             button.innerHTML = '✅ Cache geleert!';
-            this.uiNavigation.showMessage('Cache wurde erfolgreich geleert. Die Seite wird neu geladen.');
             
             // Nach kurzer Zeit Seite neu laden mit Hard Refresh
             setTimeout(() => {
