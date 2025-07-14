@@ -110,12 +110,19 @@ self.addEventListener('fetch', event => {
   console.log('[Service Worker] Fetch:', url.pathname);
   
   // Prüfe auf Cache-Busting Parameter (für Updates)
-  const isCacheBusting = url.searchParams.has('_t') || url.searchParams.has('t');
+  const isCacheBusting = url.searchParams.has('_t') || url.searchParams.has('t') || url.searchParams.has('_cache_bust');
   
   // Network First für HTML-Dateien und Cache-Busting Requests
   if (event.request.headers.get('accept')?.includes('text/html') || isCacheBusting) {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, {
+        cache: isCacheBusting ? 'no-cache' : 'default',
+        headers: isCacheBusting ? {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        } : {}
+      })
         .then(response => {
           // Wenn Netzwerk verfügbar, speichere im Cache und gib zurück
           if (response && response.status === 200) {

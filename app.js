@@ -127,6 +127,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Event-Listener für manuelles Speichern der Umweltdaten
     saveEnvironmentalDataButton.addEventListener('click', saveEnvironmentalDataWithFeedback);
     
+    // Event-Listener für Update-Button
+    const updateAppButton = document.getElementById('update-app-button');
+    if (updateAppButton) {
+        updateAppButton.addEventListener('click', () => {
+            if (updateAvailable) {
+                performAppUpdate();
+            } else {
+                manualUpdateCheck();
+            }
+        });
+    }
+    
     // Online/Offline Status überwachen
     window.addEventListener('online', handleOnlineStatus);
     window.addEventListener('offline', handleOfflineStatus);
@@ -1113,32 +1125,62 @@ async function performUpdateCheck() {
 
 async function checkManifestVersion() {
     try {
-        // Stelle sicher, dass die lokale Version geladen ist
-        if (!APP_VERSION) {
-            await loadAppVersion();
+        // 1. Lade die gecachte Version (aus dem Service Worker Cache)
+        let cachedVersion = null;
+        if ('caches' in window) {
+            try {
+                const cacheNames = await caches.keys();
+                for (const cacheName of cacheNames) {
+                    const cache = await caches.open(cacheName);
+                    const cachedResponse = await cache.match('./manifest.json');
+                    if (cachedResponse) {
+                        const cachedManifest = await cachedResponse.json();
+                        cachedVersion = cachedManifest.version;
+                        console.log('Gecachte Version gefunden:', cachedVersion);
+                        break;
+                    }
+                }
+            } catch (error) {
+                console.log('Fehler beim Laden der gecachten Version:', error);
+            }
         }
         
-        // Lade die aktuelle Manifest-Datei vom Server
+        // Fallback: Verwende APP_VERSION falls keine gecachte Version gefunden
+        if (!cachedVersion) {
+            if (!APP_VERSION) {
+                await loadAppVersion();
+            }
+            cachedVersion = APP_VERSION;
+            console.log('Verwende APP_VERSION als gecachte Version:', cachedVersion);
+        }
+        
+        // 2. Lade die aktuelle Manifest-Datei direkt vom Server (ohne Cache)
         const response = await fetch('./manifest.json?t=' + Date.now(), {
-            cache: 'no-cache'
+            cache: 'no-cache',
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
         });
         
         if (!response.ok) {
-            console.log('Manifest konnte nicht geladen werden');
+            console.log('Manifest konnte nicht vom Server geladen werden');
             return false;
         }
         
         const serverManifest = await response.json();
         const serverVersion = serverManifest.version;
         
-        console.log(`Lokale Version: ${APP_VERSION}, Server Version: ${serverVersion}`);
+        console.log(`Gecachte Version: ${cachedVersion}, Server Version: ${serverVersion}`);
         
-        // Vergleiche Versionen
-        if (serverVersion && serverVersion !== APP_VERSION) {
-            console.log('Neue Version verfügbar:', serverVersion);
+        // 3. Vergleiche Versionen
+        if (serverVersion && serverVersion !== cachedVersion) {
+            console.log('Neue Version verfügbar! Gecacht:', cachedVersion, '-> Server:', serverVersion);
             return true;
         }
         
+        console.log('Keine neue Version verfügbar');
         return false;
         
     } catch (error) {
@@ -1202,11 +1244,17 @@ async function performAppUpdate() {
         
         console.log('Update abgeschlossen, lade Seite neu...');
         
-        // 4. Seite mit Cache-Bypass neu laden (moderne Methode)
-        // Verwende location.href mit Cache-Busting Parameter
+        // 4. Seite mit starkem Cache-Bypass neu laden
+        // Verwende window.location.replace mit Cache-Busting und zusätzlichen Parametern
         const url = new URL(window.location.href);
         url.searchParams.set('_t', Date.now());
-        window.location.href = url.toString();
+        url.searchParams.set('_cache_bust', Math.random().toString(36).substring(7));
+        
+        // Zusätzlich: Versuche alle Browser-Caches zu umgehen
+        console.log('Lade Seite neu mit URL:', url.toString());
+        
+        // Verwende location.replace statt location.href für stärkeren Cache-Bypass
+        window.location.replace(url.toString());
         
     } catch (error) {
         console.error('Fehler beim App-Update:', error);
@@ -1215,12 +1263,13 @@ async function performAppUpdate() {
         updateButton.disabled = false;
         updateButton.innerHTML = '<span class="update-icon">❌</span><span class="update-text">Update fehlgeschlagen</span>';
         
-        // Fallback: Einfach neu laden mit Cache-Busting
+        // Fallback: Einfach neu laden mit starkem Cache-Busting
         setTimeout(() => {
             if (confirm('Fehler beim Update. Soll die Seite neu geladen werden?')) {
                 const url = new URL(window.location.href);
                 url.searchParams.set('_t', Date.now());
-                window.location.href = url.toString();
+                url.searchParams.set('_cache_bust', Math.random().toString(36).substring(7));
+                window.location.replace(url.toString());
             } else {
                 // Button zurücksetzen
                 updateButton.innerHTML = '<span class="update-icon">🔄</span><span class="update-text">Nach Updates suchen</span>';
